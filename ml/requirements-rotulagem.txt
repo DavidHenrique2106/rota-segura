@@ -1,0 +1,4 @@
+# Só para a etapa 2 (rotulagem automática). Os modelos prontos aqui NÃO vão para o app:
+# servem apenas para rotular fotos reais; o modelo do projeto é treinado do zero.
+torch>=2.4
+transformers>=4.46,<5

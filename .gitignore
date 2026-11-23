@@ -1,0 +1,19 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.venv/
+__pycache__/
+.DS_Store
+.vercel/
+
+# Fotos baixadas de bases públicas (Places365, Open Images, Hugging Face):
+# não são redistribuídas aqui; ml/1_coleta_dados.py baixa tudo de novo.
+data/fontes/
+# Base gerada pela etapa 4 (recriada a partir das fontes).
+data/base/
+# Arquivos temporários da rotulagem.
+data/*.parcial.csv
+data/rotulagem.log
+data/rotular_loop.sh
+data/treinar_loop.sh
+data/treino.log

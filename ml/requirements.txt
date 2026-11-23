@@ -1,0 +1,13 @@
+# Use Python 3.11 ou 3.12 (o TensorFlow 2.19 não suporta 3.13+).
+tensorflow==2.19.0
+tensorflowjs==4.22.0
+# Fixados para evitar conflito de protobuf/pkg_resources do conversor tensorflowjs.
+ydf==0.11.0
+setuptools<81
+numpy<2.1
+scipy>=1.11
+pillow>=10
+scikit-learn>=1.5,<2
+matplotlib>=3.9,<4
+pillow-heif>=0.18  # fotos HEIC de iPhone (maquete)
+reportlab>=4  # relatório em PDF (ml/8_relatorio_pdf.py)
