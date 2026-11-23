@@ -1,0 +1,180 @@
+{
+  "amostras_teste": 840,
+  "acuracia_teste": 0.7214,
+  "acuracia_modelo_base_regressao_logistica": 0.3679,
+  "revocacao_perigo": 0.7643,
+  "perigo_classificado_como_seguro": 57,
+  "relatorio_por_classe": {
+    "seguro": {
+      "precision": 0.6266666666666667,
+      "recall": 0.6714285714285714,
+      "f1-score": 0.6482758620689655,
+      "support": 280.0
+    },
+    "atencao": {
+      "precision": 0.9147982062780269,
+      "recall": 0.7285714285714285,
+      "f1-score": 0.8111332007952287,
+      "support": 280.0
+    },
+    "perigo": {
+      "precision": 0.6750788643533123,
+      "recall": 0.7642857142857142,
+      "f1-score": 0.7169179229480737,
+      "support": 280.0
+    },
+    "accuracy": 0.7214285714285714,
+    "macro avg": {
+      "precision": 0.7388479124326687,
+      "recall": 0.7214285714285714,
+      "f1-score": 0.7254423286040893,
+      "support": 840.0
+    },
+    "weighted avg": {
+      "precision": 0.7388479124326687,
+      "recall": 0.7214285714285714,
+      "f1-score": 0.7254423286040892,
+      "support": 840.0
+    }
+  },
+  "matriz_confusao": {
+    "linhas_real_colunas_previsto": [
+      "seguro",
+      "atencao",
+      "perigo"
+    ],
+    "valores": [
+      [
+        188,
+        10,
+        82
+      ],
+      [
+        55,
+        204,
+        21
+      ],
+      [
+        57,
+        9,
+        214
+      ]
+    ]
+  },
+  "parametros_modelo": 198771,
+  "limiar_perigo": 0.3,
+  "limiar_escolha_validacao": [
+    {
+      "limiar": 0.15,
+      "revocacao_perigo": 0.9143,
+      "f1_medio": 0.6683,
+      "acuracia": 0.6786
+    },
+    {
+      "limiar": 0.2,
+      "revocacao_perigo": 0.8857,
+      "f1_medio": 0.7043,
+      "acuracia": 0.7071
+    },
+    {
+      "limiar": 0.25,
+      "revocacao_perigo": 0.8429,
+      "f1_medio": 0.7219,
+      "acuracia": 0.7214
+    },
+    {
+      "limiar": 0.3,
+      "revocacao_perigo": 0.7893,
+      "f1_medio": 0.7264,
+      "acuracia": 0.7238
+    },
+    {
+      "limiar": 0.35,
+      "revocacao_perigo": 0.7464,
+      "f1_medio": 0.7392,
+      "acuracia": 0.7357
+    },
+    {
+      "limiar": 0.4,
+      "revocacao_perigo": 0.6714,
+      "f1_medio": 0.7324,
+      "acuracia": 0.7286
+    },
+    {
+      "limiar": 0.45,
+      "revocacao_perigo": 0.6286,
+      "f1_medio": 0.7328,
+      "acuracia": 0.7298
+    },
+    {
+      "limiar": 0.5,
+      "revocacao_perigo": 0.5893,
+      "f1_medio": 0.7305,
+      "acuracia": 0.7286
+    },
+    {
+      "limiar": 0.55,
+      "revocacao_perigo": 0.5429,
+      "f1_medio": 0.7236,
+      "acuracia": 0.7226
+    },
+    {
+      "limiar": 0.6,
+      "revocacao_perigo": 0.5143,
+      "f1_medio": 0.7168,
+      "acuracia": 0.7167
+    }
+  ],
+  "sem_limiar_argmax": {
+    "acuracia": 0.7226,
+    "revocacao_perigo": 0.6036,
+    "perigo_classificado_como_seguro": 101
+  },
+  "por_origem": {
+    "fotos_reais": {
+      "amostras": 355,
+      "acuracia": 0.6254,
+      "revocacao_perigo": 0.7042,
+      "matriz_confusao": [
+        [
+          122,
+          2,
+          72
+        ],
+        [
+          9,
+          0,
+          8
+        ],
+        [
+          41,
+          1,
+          100
+        ]
+      ]
+    },
+    "maquete": {},
+    "montagens": {
+      "amostras": 485,
+      "acuracia": 0.7918,
+      "revocacao_perigo": 0.8261,
+      "matriz_confusao": [
+        [
+          66,
+          8,
+          10
+        ],
+        [
+          46,
+          204,
+          13
+        ],
+        [
+          16,
+          8,
+          114
+        ]
+      ]
+    }
+  }
+}

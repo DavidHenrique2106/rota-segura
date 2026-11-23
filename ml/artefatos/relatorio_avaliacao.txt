@@ -1,0 +1,29 @@
+AVALIAÇÃO NO CONJUNTO DE TESTE (840 imagens nunca vistas no treino)
+Regra de decisão: 'perigo' quando P(perigo) >= 0.30 (escolhido na validação: maior F1 médio com revocação de perigo >= 0,75).
+Sem limiar (classe mais provável): acurácia 0.723, revocação de perigo 0.604
+
+              precision    recall  f1-score   support
+
+      seguro      0.627     0.671     0.648       280
+     atencao      0.915     0.729     0.811       280
+      perigo      0.675     0.764     0.717       280
+
+    accuracy                          0.721       840
+   macro avg      0.739     0.721     0.725       840
+weighted avg      0.739     0.721     0.725       840
+
+Matriz de confusão (linhas = real, colunas = previsto; ordem seguro, atencao, perigo):
+[[188  10  82]
+ [ 55 204  21]
+ [ 57   9 214]]
+
+Acurácia da CNN:                          0.721
+Acurácia do modelo de base (reg. logística): 0.368
+Revocação de 'perigo':                    0.764
+Casos de 'perigo' previstos como 'seguro': 57
+
+Só fotos reais (355 imagens): acurácia 0.625, revocação de perigo 0.704
+  matriz: [[122, 2, 72], [9, 0, 8], [41, 1, 100]]
+
+Só montagens (485 imagens): acurácia 0.792, revocação de perigo 0.826
+  matriz: [[66, 8, 10], [46, 204, 13], [16, 8, 114]]

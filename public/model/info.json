@@ -1,0 +1,14 @@
+{
+  "classes": [
+    "seguro",
+    "atencao",
+    "perigo"
+  ],
+  "tamanho_imagem": 160,
+  "acuracia_teste": 0.7214,
+  "revocacao_perigo": 0.7643,
+  "amostras_teste": 840,
+  "limiar_perigo": 0.3,
+  "acuracia_fotos_reais": 0.6254,
+  "amostras_fotos_reais": 355
+}
