@@ -117,8 +117,15 @@ def save_confusion_matrix(matrix: np.ndarray, path) -> None:
 def save_error_examples(images, true, predicted, confidence, path, limit=24) -> None:
     from PIL import Image, ImageDraw
 
-    wrong = np.flatnonzero(true != predicted)[:limit]
-    if len(wrong) == 0:
+    # Mostra cada TIPO de erro (real -> previsto), começando pelo mais grave: perigo previsto como seguro.
+    order = [(2, 0), (2, 1), (1, 0), (0, 2), (1, 2), (0, 1)]
+    rng = np.random.default_rng(0)
+    per_type = limit // 6
+    wrong = []
+    for real_class, predicted_class in order:
+        idx = np.flatnonzero((true == real_class) & (predicted == predicted_class))
+        wrong += list(rng.choice(idx, size=min(per_type, len(idx)), replace=False)) if len(idx) else []
+    if not wrong:
         return
     cell = 160
     columns = 6
