@@ -8,6 +8,8 @@ A câmera do celular olha o caminho à frente. Uma rede neural treinada **do zer
 - **Relatório completo para o professor:** [Relatorio_Rota_Segura.pdf](Relatorio_Rota_Segura.pdf)
 - **Resultados da última avaliação:** [ml/artefatos/relatorio_avaliacao.txt](ml/artefatos/relatorio_avaliacao.txt)
 
+**Arduino:** o celular envia o risco por Bluetooth (BLE) para um ESP32 ou um Arduino Uno com HM-10. A placa apita, acende LEDs e vibra; o sensor HC-SR04 mede a distância real como reforço. Código e ligações em [arduino/README.md](arduino/README.md).
+
 > **Segurança:** é uma demonstração acadêmica. Não substitui bengala, cão-guia nem orientação profissional.
 
 ---
@@ -97,6 +99,8 @@ data/rotulos_*.csv        rótulos gerados pela etapa 2
 data/maquete/             fotos da maquete
 public/model/             modelo exportado para o app (TensorFlow.js)
 src/App.tsx               app: câmera, classificação, som e vibração
+src/arduino.ts            conexão Bluetooth com o Arduino
+arduino/                  código do ESP32 / Arduino Uno + HM-10 e esquema de ligações
 Relatorio_Rota_Segura.pdf relatório para o professor
 ```
 
