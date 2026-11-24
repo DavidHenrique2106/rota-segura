@@ -1,7 +1,19 @@
 {
-  "descricao": "Os dois modelos avaliados no MESMO conjunto de teste (840 imagens), usando a classe mais provável (sem limiar).",
+  "descricao": "As duas versões avaliadas no MESMO conjunto de teste (900 imagens), usando a classe mais provável (sem limiar).",
   "modelos": [
-    {"nome": "Versão 1: treinada só com montagens", "acuracia": 0.690, "acuracia_fotos_reais": 0.487, "revocacao_perigo_fotos_reais": 0.563, "acuracia_montagens": 0.839},
-    {"nome": "Versão 2: fotos reais rotuladas + montagens", "acuracia": 0.723, "acuracia_fotos_reais": 0.651, "revocacao_perigo_fotos_reais": 0.465, "acuracia_montagens": 0.775}
+    {
+      "nome": "Versão 1: treinada só com montagens",
+      "acuracia": 0.6522,
+      "acuracia_fotos_reais": 0.4873,
+      "revocacao_perigo_fotos_reais": 0.5634,
+      "acuracia_montagens": 0.8392
+    },
+    {
+      "nome": "Versão atual: fotos reais + vídeos da maquete + montagens",
+      "acuracia": 0.7389,
+      "acuracia_fotos_reais": 0.5915,
+      "revocacao_perigo_fotos_reais": 0.5493,
+      "acuracia_montagens": 0.8206
+    }
   ]
 }

@@ -133,6 +133,35 @@ def save_error_examples(images, true, predicted, confidence, path, limit=24) -> 
     sheet.save(path, quality=90)
 
 
+def compare_with_first_version(test_x, test_y, names, current_pred) -> None:
+    """Avalia a 1ª versão do modelo (treinada só com montagens, guardada em data/modelo_antigo) no MESMO teste
+    e grava ml/artefatos/comparacao_modelos.json. Ambas usam a classe mais provável (sem limiar)."""
+    old_dir = Path("data/modelo_antigo")
+    if not (old_dir / "model.json").exists():
+        return
+    import tensorflowjs as tfjs
+
+    old_pred = tfjs.converters.load_keras_model(str(old_dir / "model.json")).predict(test_x, verbose=0).argmax(axis=1)
+    real = np.array([n.startswith("real_") for n in names])
+    comp = np.array([not n.startswith(("real_", "maquete_")) for n in names])
+
+    def summarize(name: str, pred: np.ndarray) -> dict:
+        def recall(mask):
+            sel = mask & (test_y == PERIGO)
+            return round(float((pred[sel] == PERIGO).mean()), 4) if sel.any() else None
+        return {"nome": name, "acuracia": round(float(accuracy_score(test_y, pred)), 4),
+                "acuracia_fotos_reais": round(float(accuracy_score(test_y[real], pred[real])), 4),
+                "revocacao_perigo_fotos_reais": recall(real),
+                "acuracia_montagens": round(float(accuracy_score(test_y[comp], pred[comp])), 4)}
+
+    result = {"descricao": f"As duas versões avaliadas no MESMO conjunto de teste ({len(test_y)} imagens), "
+                           "usando a classe mais provável (sem limiar).",
+              "modelos": [summarize("Versão 1: treinada só com montagens", old_pred),
+                          summarize("Versão atual: fotos reais + vídeos da maquete + montagens", current_pred)]}
+    (ARTIFACTS_DIR / "comparacao_modelos.json").write_text(json.dumps(result, indent=2, ensure_ascii=False),
+                                                         encoding="utf-8")
+
+
 def main() -> None:
     # Avisos numéricos espúrios do numpy/Accelerate no macOS durante a regressão logística.
     warnings.filterwarnings("ignore", category=RuntimeWarning)
@@ -170,10 +199,12 @@ def main() -> None:
             return {}
         sub_report = classification_report(test_y[mask], predicted[mask], labels=range(3), target_names=list(CLASSES),
                                            output_dict=True, zero_division=0)
+        has_danger = bool((test_y[mask] == PERIGO).any())
         return {
             "amostras": int(mask.sum()),
             "acuracia": round(float(accuracy_score(test_y[mask], predicted[mask])), 4),
-            "revocacao_perigo": round(sub_report["perigo"]["recall"], 4),
+            # Sem nenhum caso de perigo no subconjunto, a revocação não está definida.
+            "revocacao_perigo": round(sub_report["perigo"]["recall"], 4) if has_danger else None,
             "matriz_confusao": confusion_matrix(test_y[mask], predicted[mask], labels=range(3)).tolist(),
         }
 
@@ -199,6 +230,7 @@ def main() -> None:
         },
         "por_origem": by_origin,
     }
+    compare_with_first_version(test_x, test_y, names, argmax_pred)
     ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
     (ARTIFACTS_DIR / "avaliacao.json").write_text(json.dumps(results, indent=2, ensure_ascii=False), encoding="utf-8")
     save_confusion_matrix(matrix, ARTIFACTS_DIR / "matriz_confusao.png")
@@ -218,8 +250,9 @@ def main() -> None:
     )
     for origin, data in by_origin.items():
         if data:
+            danger = "sem casos de perigo" if data["revocacao_perigo"] is None else f"{data['revocacao_perigo']:.3f}"
             summary += (f"\nSó {origin.replace('_', ' ')} ({data['amostras']} imagens): acurácia {data['acuracia']:.3f}, "
-                        f"revocação de perigo {data['revocacao_perigo']:.3f}\n"
+                        f"revocação de perigo {danger}\n"
                         f"  matriz: {data['matriz_confusao']}\n")
     (ARTIFACTS_DIR / "relatorio_avaliacao.txt").write_text(summary, encoding="utf-8")
     print(summary)

@@ -29,6 +29,8 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import random
+import re
 from pathlib import Path
 
 from sklearn.model_selection import train_test_split
@@ -86,6 +88,23 @@ def main() -> None:
             own_photos += [(f"sem_rotulo/{r['arquivo']}", r["rotulo"]) for r in csv.DictReader(handle)
                            if r["rotulo"] in CLASSES]
     own = {"treino": [], "validacao": [], "teste": []}
+
+    # Quadros de vídeo: divididos por TRECHO de 5 s (vídeo + trecho), nunca quadro a quadro,
+    # porque quadros vizinhos são quase iguais (evita vazamento entre treino e teste).
+    frames = [(f, label) for f, label in own_photos if re.match(r"sem_rotulo/video\d+_t\d+_q", f)]
+    own_photos = [item for item in own_photos if item not in frames]
+    if frames:
+        groups = sorted({re.match(r"sem_rotulo/(video\d+_t\d+)_", f).group(1) for f, _ in frames})
+        random.Random(SEED).shuffle(groups)
+        n_train, n_val = round(len(groups) * 0.70), round(len(groups) * 0.15)
+        part_of = {g: "treino" for g in groups[:n_train]}
+        part_of.update({g: "validacao" for g in groups[n_train:n_train + n_val]})
+        part_of.update({g: "teste" for g in groups[n_train + n_val:]})
+        for f, label in frames:
+            own[part_of[re.match(r"sem_rotulo/(video\d+_t\d+)_", f).group(1)]].append([f, label])
+        print(f"Quadros de vídeo: {len(frames)} em {len(groups)} trechos de 5 s "
+              f"({n_train} treino, {n_val} validação, {len(groups) - n_train - n_val} teste)")
+
     if own_photos:
         by_label = {label: [p for p in own_photos if p[1] == label] for label in CLASSES}
         for label, items in by_label.items():

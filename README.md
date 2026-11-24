@@ -17,6 +17,7 @@ A câmera do celular olha o caminho à frente. Uma rede neural treinada **do zer
 | Etapa | Script | O que faz |
 | --- | --- | --- |
 | 1. Coleta | `1_coleta_dados.py` | Baixa fotos reais de bases públicas (Places365, Open Images, Hugging Face) e recorta cones e caixas |
+| 1b. Vídeos | `1b_quadros_dos_videos.py` | Extrai 3 quadros/s dos vídeos da maquete (`data/maquete/videos/`), ignora repetidos e borrados |
 | 2. Rotulagem | `2_rotulagem_automatica.py` | Um detector pré-treinado (OWLv2) marca os obstáculos de cada foto real; uma regra de tamanho e posição gera o rótulo |
 | 3. Divisão | `3_divisao_treino_teste.py` | Separa as fotos de origem em 70% treino, 15% validação e 15% teste, sem vazamento |
 | 4. Base | `4_montar_base_rotulada.py` | Junta as fotos reais rotuladas com montagens de cones e caixas, com as classes equilibradas |
@@ -71,7 +72,11 @@ As fotos baixadas da internet **não estão no repositório**, porque as licenç
 
 ---
 
-## Fotos da maquete
+## Fotos e vídeos da maquete
+
+**Vídeos (recomendado):** grave andando devagar pela calçada da maquete, do ponto de vista do boneco, em direção a cada obstáculo. Coloque os vídeos em `data/maquete/videos/` e rode `bash ml/executar_tudo.sh`. A etapa 1b extrai os quadros e a etapa 2 rotula cada um. A divisão treino/validação/teste é feita por **trechos de 5 segundos**, para que quadros quase iguais não fiquem em partes diferentes. Para a maquete, o rotulador procura só os objetos dela (cone, barreira, lata, pote, boneco, carrinho) e ignora a faixa amarela tátil, que ele confundia com uma barreira.
+
+**Fotos:**
 
 1. Tire as fotos **do ponto de vista do boneco**: celular em pé na calçada, câmera olhando para frente. Fotografe cada obstáculo bem perto, a uma distância média e longe, e também o caminho livre. Umas 150 fotos no total.
 2. Coloque-as em `data/maquete/sem_rotulo/`. **Não precisa rotular**: a etapa 2 rotula sozinha. JPG, PNG e HEIC funcionam.

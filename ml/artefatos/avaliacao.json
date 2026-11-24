@@ -1,40 +1,40 @@
 {
-  "amostras_teste": 840,
-  "acuracia_teste": 0.7214,
-  "acuracia_modelo_base_regressao_logistica": 0.3679,
-  "revocacao_perigo": 0.7643,
-  "perigo_classificado_como_seguro": 57,
+  "amostras_teste": 900,
+  "acuracia_teste": 0.7211,
+  "acuracia_modelo_base_regressao_logistica": 0.36,
+  "revocacao_perigo": 0.8107,
+  "perigo_classificado_como_seguro": 39,
   "relatorio_por_classe": {
     "seguro": {
-      "precision": 0.6266666666666667,
-      "recall": 0.6714285714285714,
-      "f1-score": 0.6482758620689655,
-      "support": 280.0
+      "precision": 0.7415730337078652,
+      "recall": 0.584070796460177,
+      "f1-score": 0.6534653465346535,
+      "support": 339.0
     },
     "atencao": {
-      "precision": 0.9147982062780269,
-      "recall": 0.7285714285714285,
-      "f1-score": 0.8111332007952287,
-      "support": 280.0
+      "precision": 0.8452830188679246,
+      "recall": 0.797153024911032,
+      "f1-score": 0.8205128205128205,
+      "support": 281.0
     },
     "perigo": {
-      "precision": 0.6750788643533123,
-      "recall": 0.7642857142857142,
-      "f1-score": 0.7169179229480737,
+      "precision": 0.6168478260869565,
+      "recall": 0.8107142857142857,
+      "f1-score": 0.7006172839506173,
       "support": 280.0
     },
-    "accuracy": 0.7214285714285714,
+    "accuracy": 0.7211111111111111,
     "macro avg": {
-      "precision": 0.7388479124326687,
-      "recall": 0.7214285714285714,
-      "f1-score": 0.7254423286040893,
-      "support": 840.0
+      "precision": 0.7345679595542487,
+      "recall": 0.7306460356951648,
+      "f1-score": 0.7248651503326972,
+      "support": 900.0
     },
     "weighted avg": {
-      "precision": 0.7388479124326687,
-      "recall": 0.7214285714285714,
-      "f1-score": 0.7254423286040892,
-      "support": 840.0
+      "precision": 0.7351501978146677,
+      "recall": 0.7211111111111111,
+      "f1-score": 0.7202907717172476,
+      "support": 900.0
     }
   },
   "matriz_confusao": {
@@ -45,134 +45,155 @@
     ],
     "valores": [
       [
-        188,
-        10,
-        82
+        198,
+        27,
+        114
       ],
       [
-        55,
-        204,
-        21
+        30,
+        224,
+        27
       ],
       [
-        57,
-        9,
-        214
+        39,
+        14,
+        227
       ]
     ]
   },
   "parametros_modelo": 198771,
-  "limiar_perigo": 0.3,
+  "limiar_perigo": 0.35,
   "limiar_escolha_validacao": [
     {
       "limiar": 0.15,
-      "revocacao_perigo": 0.9143,
-      "f1_medio": 0.6683,
-      "acuracia": 0.6786
+      "revocacao_perigo": 0.9573,
+      "f1_medio": 0.5896,
+      "acuracia": 0.617
     },
     {
       "limiar": 0.2,
-      "revocacao_perigo": 0.8857,
-      "f1_medio": 0.7043,
-      "acuracia": 0.7071
+      "revocacao_perigo": 0.9288,
+      "f1_medio": 0.6268,
+      "acuracia": 0.6411
     },
     {
       "limiar": 0.25,
-      "revocacao_perigo": 0.8429,
-      "f1_medio": 0.7219,
-      "acuracia": 0.7214
+      "revocacao_perigo": 0.8968,
+      "f1_medio": 0.6549,
+      "acuracia": 0.6628
     },
     {
       "limiar": 0.3,
-      "revocacao_perigo": 0.7893,
-      "f1_medio": 0.7264,
-      "acuracia": 0.7238
+      "revocacao_perigo": 0.847,
+      "f1_medio": 0.6844,
+      "acuracia": 0.6858
     },
     {
       "limiar": 0.35,
-      "revocacao_perigo": 0.7464,
-      "f1_medio": 0.7392,
-      "acuracia": 0.7357
+      "revocacao_perigo": 0.7651,
+      "f1_medio": 0.6988,
+      "acuracia": 0.6961
     },
     {
       "limiar": 0.4,
-      "revocacao_perigo": 0.6714,
-      "f1_medio": 0.7324,
-      "acuracia": 0.7286
+      "revocacao_perigo": 0.7367,
+      "f1_medio": 0.7185,
+      "acuracia": 0.7156
     },
     {
       "limiar": 0.45,
-      "revocacao_perigo": 0.6286,
-      "f1_medio": 0.7328,
-      "acuracia": 0.7298
+      "revocacao_perigo": 0.6797,
+      "f1_medio": 0.7161,
+      "acuracia": 0.7133
     },
     {
       "limiar": 0.5,
-      "revocacao_perigo": 0.5893,
-      "f1_medio": 0.7305,
-      "acuracia": 0.7286
+      "revocacao_perigo": 0.6157,
+      "f1_medio": 0.7103,
+      "acuracia": 0.7087
     },
     {
       "limiar": 0.55,
-      "revocacao_perigo": 0.5429,
-      "f1_medio": 0.7236,
-      "acuracia": 0.7226
+      "revocacao_perigo": 0.573,
+      "f1_medio": 0.7174,
+      "acuracia": 0.7179
     },
     {
       "limiar": 0.6,
-      "revocacao_perigo": 0.5143,
-      "f1_medio": 0.7168,
-      "acuracia": 0.7167
+      "revocacao_perigo": 0.5445,
+      "f1_medio": 0.7138,
+      "acuracia": 0.7156
     }
   ],
   "sem_limiar_argmax": {
-    "acuracia": 0.7226,
-    "revocacao_perigo": 0.6036,
-    "perigo_classificado_como_seguro": 101
+    "acuracia": 0.7389,
+    "revocacao_perigo": 0.6893,
+    "perigo_classificado_como_seguro": 69
   },
   "por_origem": {
     "fotos_reais": {
       "amostras": 355,
-      "acuracia": 0.6254,
-      "revocacao_perigo": 0.7042,
+      "acuracia": 0.5577,
+      "revocacao_perigo": 0.7535,
       "matriz_confusao": [
         [
-          122,
-          2,
-          72
+          91,
+          8,
+          97
         ],
         [
-          9,
+          5,
           0,
-          8
+          12
         ],
         [
-          41,
-          1,
-          100
+          32,
+          3,
+          107
         ]
       ]
     },
-    "maquete": {},
-    "montagens": {
-      "amostras": 485,
-      "acuracia": 0.7918,
-      "revocacao_perigo": 0.8261,
+    "maquete": {
+      "amostras": 60,
+      "acuracia": 0.8833,
+      "revocacao_perigo": null,
       "matriz_confusao": [
         [
-          66,
-          8,
-          10
+          53,
+          0,
+          6
         ],
         [
-          46,
-          204,
-          13
+          1,
+          0,
+          0
         ],
         [
-          16,
-          8,
-          114
+          0,
+          0,
+          0
+        ]
+      ]
+    },
+    "montagens": {
+      "amostras": 485,
+      "acuracia": 0.8206,
+      "revocacao_perigo": 0.8696,
+      "matriz_confusao": [
+        [
+          54,
+          19,
+          11
+        ],
+        [
+          24,
+          224,
+          15
+        ],
+        [
+          7,
+          11,
+          120
         ]
       ]
     }

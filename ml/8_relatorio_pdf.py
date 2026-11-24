@@ -370,9 +370,8 @@ def main() -> None:
         st += [Spacer(1, 6), p("Comparação entre as duas versões do modelo", "h2"),
                p("A primeira versão foi treinada só com montagens (cone ou caixa colados em fotos de caminhos) e tinha "
                  "87% de acerto num teste só de montagens. Ao testar as duas versões no <b>mesmo</b> teste, que "
-                 "inclui fotos reais, fica claro que a primeira não generalizava para o mundo real. A segunda versão, "
-                 "com fotos reais rotuladas, acerta bem mais nas fotos reais; a perda na revocação de perigo foi "
-                 "compensada pelo ajuste de limiar acima. " + comp["descricao"]),
+                 "inclui fotos reais, fica claro que a primeira não generalizava para o mundo real: a versão atual, "
+                 "com fotos reais e vídeos da maquete, acerta mais nas fotos reais. " + comp["descricao"]),
                table(rows_c, [6.2, 2.4, 2.6, 3.2, 2.6])]
     st += figure(ART / "matriz_confusao.png", 9.5,
                  "Matriz de confusão no teste: linhas = classe real, colunas = classe prevista.")
@@ -397,10 +396,27 @@ def main() -> None:
              "sem rotulagem manual: basta colocá-las em <font name='Courier'>data/maquete/sem_rotulo/</font> e rodar "
              "o pipeline de novo.")]
     st += figure(ART / "maquete_deteccao.jpg", 16.5, "Detecções do OWLv2 nas fotos da maquete.")
-    st += [p("As fotos úteis para treino são as tiradas do ponto de vista do boneco (celular em pé na calçada, "
-             "olhando para frente), em várias distâncias de cada obstáculo e também com o caminho livre."
-             + (f" Nesta versão, {len(labels_maq)} fotos da maquete foram usadas." if labels_maq else
-                " Nesta versão do relatório, as fotos da maquete desse tipo ainda não tinham sido incluídas."))]
+    frames = [r for r in labels_maq if r["arquivo"].startswith("video")]
+    if frames:
+        n_videos = len({r["arquivo"].split("_")[0] for r in frames})
+        n_segments = len({"_".join(r["arquivo"].split("_")[:2]) for r in frames if r["rotulo"] in CLASSES})
+        maq_counts = Counter(r["rotulo"] for r in frames)
+        st += [p("Vídeos da maquete", "h2"),
+               p(f"O grupo gravou vídeos percorrendo a maquete. O script <font name='Courier'>ml/1b_quadros_dos_videos.py</font> "
+                 f"extraiu 3 quadros por segundo de {n_videos} vídeos (um vídeo repetido foi ignorado e os quadros "
+                 f"borrados descartados), totalizando {len(frames)} quadros. A etapa 2 rotulou cada quadro: "
+                 f"{maq_counts['seguro']} seguro, {maq_counts['atencao']} atenção, {maq_counts['perigo']} perigo e "
+                 f"{maq_counts['descartada']} descartados."),
+               p(f"Como quadros vizinhos são quase iguais, a divisão em treino, validação e teste foi feita por "
+                 f"<b>trechos de 5 segundos</b> ({n_segments} trechos), e não quadro a quadro: todos os quadros de um "
+                 "trecho ficam na mesma parte. Assim o teste não contém quase-cópias de imagens do treino."
+                 + (f" No teste, o modelo acertou {pct(maq_eval.get('acuracia'))} dos quadros da maquete "
+                    f"({maq_eval.get('amostras')} quadros)." if maq_eval else "")
+                 + (" Os trechos sorteados para o teste não tinham nenhum quadro de perigo, então ainda não dá para "
+                    "medir a detecção de perigo na maquete; mais vídeos aproximando-se dos obstáculos resolvem isso."
+                    if maq_eval and maq_eval.get("revocacao_perigo") is None else ""))]
+    st += [p("Para melhorar ainda mais, vale gravar mais vídeos do ponto de vista do boneco (celular em pé na "
+             "calçada, olhando para frente), aproximando-se devagar de cada obstáculo e também com o caminho livre.")]
 
     # --------------------------------------------------------- 10. limitações
     st += [p("10. Limitações e próximos passos", "h1"),
