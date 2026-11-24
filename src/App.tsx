@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import * as tf from '@tensorflow/tfjs'
 import type { LayersModel } from '@tensorflow/tfjs'
-import { AlertTriangle, Camera, Check, CircleHelp, Download, Eye, ImagePlus, LoaderCircle, Radio, ShieldCheck, Volume2, VolumeX, Vibrate, X } from 'lucide-react'
+import { ArduinoLink, bluetoothSupported, RISK_CODE } from './arduino'
+import { AlertTriangle, Bluetooth, BluetoothConnected, Camera, Check, CircleHelp, Download, Eye, ImagePlus, LoaderCircle, Radio, ShieldCheck, Volume2, VolumeX, Vibrate, X } from 'lucide-react'
 
 const CLASSES = ['seguro', 'atencao', 'perigo'] as const
 const IMAGE_SIZE = 160 // mesmo tamanho usado no treino (ml/comum.py)
@@ -40,6 +41,11 @@ export default function App() {
   const [vibrationOn, setVibrationOn] = useState(true)
   const [busy, setBusy] = useState(false)
   const [modelInfo, setModelInfo] = useState<ModelInfo | null>(null)
+  const linkRef = useRef<ArduinoLink | null>(null)
+  const [arduino, setArduino] = useState<'off' | 'connecting' | 'on'>('off')
+  const [distance, setDistance] = useState<number | null>(null)
+  const [arduinoMessage, setArduinoMessage] = useState(
+    bluetoothSupported() ? 'Liga o buzzer, LED e vibração da maquete por Bluetooth.' : 'Bluetooth indisponível neste navegador (use o Chrome no Android ou o Bluefy no iPhone).')
   const dangerThreshold = useRef<number | null>(null)
 
   useEffect(() => {
@@ -134,6 +140,7 @@ export default function App() {
       const nextRisk = CLASSES[maxIndex] ?? 'atencao'
       setRisk(nextRisk)
       setConfidence(values[maxIndex] ?? 0)
+      void linkRef.current?.send(RISK_CODE[nextRisk])  // o Arduino apita/acende conforme o risco
       if (previousRisk.current !== nextRisk || (nextRisk === 'perigo' && Date.now() - lastAlertAt.current > 3000)) {
         announceRisk(nextRisk)
       }
@@ -142,6 +149,26 @@ export default function App() {
       setAlertMessage('Falha ao analisar o quadro. Verifique o modelo exportado.')
     } finally {
       input.dispose()
+    }
+  }
+
+  async function connectArduino() {
+    if (arduino === 'on') { linkRef.current?.disconnect(); return }
+    setArduino('connecting')
+    setArduinoMessage('Escolha o dispositivo "RotaSegura" (ESP32) ou "HMSoft" (HM-10) na lista.')
+    const link = new ArduinoLink(
+      (cm) => setDistance(cm),
+      () => { linkRef.current = null; setArduino('off'); setDistance(null); setArduinoMessage('Arduino desconectado.') },
+    )
+    try {
+      await link.connect()
+      linkRef.current = link
+      setArduino('on')
+      setArduinoMessage(`Conectado a ${link.name}. O Arduino recebe o risco a cada análise.`)
+    } catch (error) {
+      setArduino('off')
+      const message = error instanceof Error ? error.message : ''
+      setArduinoMessage(message.includes('cancel') ? 'Conexão cancelada.' : `Não foi possível conectar: ${message || 'verifique se o Bluetooth está ligado.'}`)
     }
   }
 
@@ -238,7 +265,7 @@ export default function App() {
               <p>{risk ? RISK_COPY[risk] : modelState === 'ready' ? 'Inicie a câmera para analisar o percurso.' : 'Rode bash ml/executar_tudo.sh para treinar e exportar o modelo.'}</p>
               {risk && <div className="confidence"><div><span>Confiança do modelo</span><strong>{Math.round(confidence * 100)}%</strong></div><div className="confidence-track"><span style={{ width: `${Math.round(confidence * 100)}%` }} /></div></div>}
             </div>
-            <div className="alerts-box"><div className="box-heading"><span>ALERTAS DO DISPOSITIVO</span><span className="ready-label"><Check size={13} /> PRONTOS</span></div><button className="setting-row" aria-pressed={soundOn} onClick={() => setSoundOn(!soundOn)}><span className="setting-name">{soundOn ? <Volume2 size={17} /> : <VolumeX size={17} />} Som</span><span className={`toggle ${soundOn ? 'enabled' : ''}`}><i /></span></button><button className="setting-row" aria-pressed={vibrationOn} onClick={() => setVibrationOn(!vibrationOn)}><span className="setting-name"><Vibrate size={17} /> Vibração</span><span className={`toggle ${vibrationOn ? 'enabled' : ''}`}><i /></span></button></div>
+            <div className="alerts-box"><div className="box-heading"><span>ALERTAS DO DISPOSITIVO</span><span className="ready-label"><Check size={13} /> PRONTOS</span></div><button className="setting-row" aria-pressed={soundOn} onClick={() => setSoundOn(!soundOn)}><span className="setting-name">{soundOn ? <Volume2 size={17} /> : <VolumeX size={17} />} Som</span><span className={`toggle ${soundOn ? 'enabled' : ''}`}><i /></span></button><button className="setting-row" aria-pressed={vibrationOn} onClick={() => setVibrationOn(!vibrationOn)}><span className="setting-name"><Vibrate size={17} /> Vibração</span><span className={`toggle ${vibrationOn ? 'enabled' : ''}`}><i /></span></button><button className="setting-row" disabled={!bluetoothSupported() || arduino === 'connecting'} aria-pressed={arduino === 'on'} onClick={() => void connectArduino()}><span className="setting-name">{arduino === 'on' ? <BluetoothConnected size={17} /> : <Bluetooth size={17} />} Arduino {arduino === 'on' && distance !== null ? `· sensor ${distance} cm` : ''}</span><span className="arduino-action">{arduino === 'on' ? 'Desconectar' : arduino === 'connecting' ? 'Conectando…' : 'Conectar'}</span></button><p className="arduino-note">{arduinoMessage}</p></div>
             <p className="alert-status" aria-live="polite">{alertMessage}</p>
           </> : <>
             <div className="collect-panel"><div className="collect-title"><span className="collect-icon"><ImagePlus size={20} /></span><div><h2>Nova imagem</h2><p>Fotos da maquete reforçam a base de treino.</p></div></div>

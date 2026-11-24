@@ -412,6 +412,23 @@ def main() -> None:
              "iPhone não permite vibração por sites. O app também tem um modo <b>Coletar dados</b> para fotografar a "
              "maquete.")]
 
+    st += [p("Integração com o Arduino", "h2"),
+           p("A IA roda no celular; o Arduino cuida dos avisos físicos na maquete. A cada análise (2 vezes por "
+             "segundo) o app envia o risco por <b>Bluetooth BLE</b> (um caractere: S, A ou P) para um ESP32 ou um "
+             "Arduino Uno com módulo HM-10. A placa aciona <b>buzzer, LEDs (verde, amarelo, vermelho) e motor de "
+             "vibração</b>. O sensor ultrassônico <b>HC-SR04</b>, da proposta original, mede a distância real e "
+             "funciona como reforço: o risco final na placa é o maior entre o risco da IA e o do sensor (menos de "
+             "10 cm = perigo; 10 a 20 cm = atenção). A distância medida volta para o app e aparece na tela. Se o "
+             "celular parar de enviar dados por 3 segundos, a placa volta ao estado seguro da IA e continua usando "
+             "só o sensor, para nunca ficar presa num alerta antigo."),
+           table([["Peça", "Função"],
+                  ["Celular (câmera + CNN)", "Vê o caminho e classifica o risco (seguro, atenção, perigo)"],
+                  ["ESP32 ou Arduino Uno + HM-10", "Recebe o risco por Bluetooth BLE e controla os avisos"],
+                  ["HC-SR04", "Mede a distância real até o obstáculo (reforço e exibição no app)"],
+                  ["Buzzer, LEDs e motor de vibração", "Avisos sonoro, visual e tátil na maquete"]], [5.5, 11.5]),
+           p("Código da placa e esquema de ligações em <font name='Courier'>arduino/</font>. O Bluetooth pelo "
+             "navegador funciona no Chrome do Android; no iPhone, pelo navegador Bluefy.", "small")]
+
     # ------------------------------------------------------------- 9. maquete
     st += [p("9. Maquete", "h1"),
            p("Testamos o rotulador (OWLv2) em fotos da maquete: ele reconhece os cones listrados, a barreira, a lata, "
