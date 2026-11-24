@@ -31,6 +31,9 @@ ROOT = Path(".")
 ART = ROOT / "ml/artefatos"
 OUT = ROOT / "Relatorio_Rota_Segura.pdf"
 APP_URL = "https://rota-segura-sepia.vercel.app"
+REPO_URL = "https://github.com/DavidHenrique2106/rota-segura"
+# Preencha com os nomes do grupo para aparecerem na capa, ex.: ["Ana Souza", "David Henrique"].
+EQUIPE: list[str] = []
 CLASSES = ("seguro", "atencao", "perigo")
 PT = {"seguro": "seguro", "atencao": "atenção", "perigo": "perigo"}
 
@@ -65,6 +68,10 @@ def p(text: str, style: str = "body") -> Paragraph:
 
 def pct(value: float | None) -> str:
     return "—" if value is None else f"{value * 100:.1f}%".replace(".", ",")
+
+
+def dec(value: float) -> str:
+    return f"{value:.3f}".replace(".", ",")
 
 
 def num(value: int) -> str:
@@ -157,6 +164,7 @@ def main() -> None:
     best = min(range(len(history)), key=lambda i: float(history[i]["val_loss"])) if history else None
     params = evaluation.get("parametros_modelo", 0)
 
+    frames_all = [r for r in labels_maq if r["arquivo"].startswith("video")]
     base_sample_sheet(ART / "exemplos_base.jpg")
 
     doc = SimpleDocTemplate(str(OUT), pagesize=A4, leftMargin=2 * cm, rightMargin=2 * cm,
@@ -168,19 +176,24 @@ def main() -> None:
     st += [Spacer(1, 3 * cm),
            p("INTELIGÊNCIA ARTIFICIAL APLICADA · 2026.2 · NSIN-0104", "small"), Spacer(1, 8),
            p("Rota Segura", "title"),
-           p("Detecção assistiva de obstáculos por câmera de celular para pessoas com deficiência visual", "subtitle"),
-           Spacer(1, 1.2 * cm)]
+           p("Detecção assistiva de obstáculos por câmera de celular para pessoas com deficiência visual", "subtitle")]
+    if EQUIPE:
+        st += [Spacer(1, 10), p("<b>Equipe:</b> " + ", ".join(EQUIPE), "body")]
+    st += [Spacer(1, 1.2 * cm)]
     summary_rows = [
         ["Pergunta", "Resposta"],
         ["O que o sistema faz", "A câmera do celular olha o caminho à frente; uma rede neural classifica a cena em "
                                 "<b>seguro</b>, <b>atenção</b> ou <b>perigo</b> e o celular avisa com som e vibração."],
         ["Modelo", f"Rede neural convolucional (CNN) treinada <b>do zero</b> em TensorFlow/Keras "
                    f"({num(params)} parâmetros). Nenhum modelo pronto roda no app."],
-        ["Dados", f"{num(len(reais))} fotos reais + recortes reais de {n_cones} cones e {n_caixas} caixas "
-                  f"sobre {num(n_fundos)} fotos de caminhos; {num(len(meta))} imagens na base final."],
+        ["Dados", f"{num(len(reais))} fotos reais da internet + {num(len(frames_all))} quadros de vídeos da maquete + "
+                  f"recortes reais de {n_cones} cones e {n_caixas} caixas sobre {num(n_fundos)} fotos de caminhos; "
+                  f"{num(len(meta))} imagens na base final."],
         ["Resultado no teste", f"Acurácia <b>{pct(evaluation['acuracia_teste'])}</b>; "
                                f"{pct(evaluation['revocacao_perigo'])} das situações de perigo detectadas"
-                               + (f"; {pct(real_eval.get('acuracia'))} só nas fotos reais" if real_eval else "") + "."],
+                               + (f"; {pct(real_eval.get('acuracia'))} nas fotos reais da internet" if real_eval else "")
+                               + (f"; {pct(maq_eval.get('acuracia'))} nos quadros da maquete" if maq_eval else "") + "."],
+        ["Código", f"<link href='{REPO_URL}' color='blue'>{REPO_URL}</link>"],
         ["App", f"Publicado em <link href='{APP_URL}' color='blue'>{APP_URL}</link> (abre no celular, usa a câmera)."],
     ]
     st += [table(summary_rows, [4, 13]), Spacer(1, 1 * cm),
@@ -204,6 +217,7 @@ def main() -> None:
              "treino e teste, treinamento e avaliação</b>. Cada etapa é um script separado:"),
            table([["Etapa", "Script", "O que faz"],
                   ["1. Coleta", "ml/1_coleta_dados.py", "Baixa fotos reais de bases públicas e recorta cones e caixas."],
+                  ["1b. Vídeos", "ml/1b_quadros_dos_videos.py", "Extrai quadros dos vídeos gravados na maquete."],
                   ["2. Rotulagem", "ml/2_rotulagem_automatica.py", "Rotula as fotos reais com um detector de objetos."],
                   ["3. Divisão", "ml/3_divisao_treino_teste.py", "Separa 70% treino, 15% validação, 15% teste."],
                   ["4. Base", "ml/4_montar_base_rotulada.py", "Monta a base final equilibrada (fotos reais + montagens)."],
@@ -227,7 +241,9 @@ def main() -> None:
                    f"{num(n_places)} fotos"],
                   ["Open Images V7", "Fotos reais com cadeiras, bancos, bicicletas, lixeiras, pessoas, cones...",
                    f"{num(n_oi)} fotos"],
-                  ["Traffic_Cone", "Fotos de cones em cenas reais", f"{n_hf} fotos"]],
+                  ["Traffic_Cone", "Fotos de cones em cenas reais", f"{n_hf} fotos"],
+                  ["Vídeos da maquete (grupo)", "3 quadros por segundo dos vídeos gravados percorrendo a maquete",
+                   f"{num(len(frames_all))} quadros"]],
                  [4.4, 9.6, 3]),
            Spacer(1, 4),
            p("Os recortes de cones e caixas passaram por <b>revisão manual</b>: removemos os que tinham marca d'água "
@@ -252,7 +268,12 @@ def main() -> None:
              "(destilação de conhecimento): um modelo grande rotula os dados e um modelo pequeno aprende com eles."),
            p(f"Resultado da rotulagem: {num(label_counts['seguro'])} seguro, {num(label_counts['atencao'])} atenção, "
              f"{num(label_counts['perigo'])} perigo e {num(label_counts['descartada'])} descartadas (ambíguas)."
-             + (f" Fotos da maquete rotuladas: {len(labels_maq)}." if labels_maq else ""))]
+             + (f" Quadros da maquete rotulados: {len(labels_maq)}." if labels_maq else "")),
+           p("Para a maquete fizemos dois ajustes no rotulador, depois de conferir as amostras: (1) como ela fica sobre "
+             "uma mesa, termos genéricos como \"table\" ou \"plant pot\" marcavam a própria base e a sebe; por isso, "
+             "nos quadros da maquete, ele procura só os objetos que existem nela (cone, barreira, lata, pote, boneco, "
+             "carrinho); (2) ele confundia a <b>faixa amarela tátil</b> com uma barreira; caixas em que mais de 35% "
+             "dos pixels são amarelo-vivo são descartadas.")]
     for label in CLASSES:
         st += figure(ART / f"rotulagem_{label}.jpg", 16.5,
                      f"Amostras rotuladas como <b>{PT[label]}</b>. Vermelho = perigo, laranja = atenção, "
@@ -271,7 +292,7 @@ def main() -> None:
            table([["Fonte", "Treino", "Validação", "Teste"],
                   split_row("Fundos (caminhos)", "fundos"), split_row("Cones (recortes)", "cone"),
                   split_row("Caixas (recortes)", "caixa"), split_row("Fotos reais rotuladas", "fotos_reais")]
-                 + ([split_row("Fotos da maquete", "maquete")] if any(division.get("maquete", {}).values()) else []),
+                 + ([split_row("Quadros da maquete", "maquete")] if any(division.get("maquete", {}).values()) else []),
                  [6.5, 3.5, 3.5, 3.5]),
            p("A <b>validação</b> é usada durante o treino para escolher a melhor época; o <b>teste</b> só é usado uma "
              "vez, na avaliação final.", "small")]
@@ -285,12 +306,14 @@ def main() -> None:
         for label in CLASSES:
             r_, c_, m_ = bc(part, label, "foto_real_rotulada"), bc(part, label, "nenhum") + bc(part, label, "cone") + \
                 bc(part, label, "caixa"), bc(part, label, "foto_maquete")
-            rows.append([part if label == "seguro" else "", PT[label], num(r_), num(c_), num(m_), num(r_ + c_ + m_)])
+            rows.append([{"treino": "treino", "validacao": "validação", "teste": "teste"}[part]
+                         if label == "seguro" else "", PT[label], num(r_), num(c_), num(m_), num(r_ + c_ + m_)])
     st += [p("5. Base rotulada (etapa 4)", "h1"),
            p("A base final junta as <b>fotos reais rotuladas</b> com <b>montagens</b>: um cone ou caixa real colado "
              "numa foto real de caminho, em tamanho e posição controlados (objeto grande e embaixo = perto). As "
              "montagens garantem muitos exemplos de cone e caixa em todas as distâncias e completam cada classe até o "
-             "mesmo total, deixando a base <b>equilibrada</b>."),
+             "mesmo total; os quadros da maquete entram por cima, então as classes ficam aproximadamente "
+             "<b>equilibradas</b>."),
            table(rows, [2.6, 2.4, 3, 3, 2.6, 2.4])]
     st += figure(ART / "exemplos_base.jpg", 16.5,
                  "Exemplos da base de treino. Linhas: seguro, atenção, perigo. As primeiras colunas são fotos reais; "
@@ -318,7 +341,7 @@ def main() -> None:
 
     # ----------------------------------------------------------- 7. avaliação
     per_class = [["Classe", "Precisão", "Revocação", "F1", "Amostras"]] + [
-        [PT[c], f"{report[c]['precision']:.3f}", f"{report[c]['recall']:.3f}", f"{report[c]['f1-score']:.3f}",
+        [PT[c], dec(report[c]['precision']), dec(report[c]['recall']), dec(report[c]['f1-score']),
          num(int(report[c]["support"]))] for c in CLASSES]
     origin_rows = [["Subconjunto do teste", "Amostras", "Acurácia", "Revocação de perigo"]]
     for name, data in (("Fotos reais", real_eval), ("Fotos da maquete", maq_eval), ("Montagens", comp_eval)):
@@ -347,7 +370,7 @@ def main() -> None:
         for r in evaluation.get("limiar_escolha_validacao", []):
             mark = " (escolhido)" if abs(r["limiar"] - threshold) < 1e-6 else ""
             rows_t.append([f"{r['limiar']:.2f}{mark}".replace(".", ","), pct(r["revocacao_perigo"]),
-                           f"{r['f1_medio']:.3f}", pct(r["acuracia"])])
+                           dec(r['f1_medio']), pct(r["acuracia"])])
         st += [Spacer(1, 8), p("Ajuste do limiar de decisão", "h2"),
                p("Escolher sempre a classe mais provável deixava passar muitos perigos "
                  f"(revocação de perigo de {pct(plain.get('revocacao_perigo'))} no teste). Como deixar passar um perigo "
@@ -375,7 +398,7 @@ def main() -> None:
                table(rows_c, [6.2, 2.4, 2.6, 3.2, 2.6])]
     st += figure(ART / "matriz_confusao.png", 9.5,
                  "Matriz de confusão no teste: linhas = classe real, colunas = classe prevista.")
-    st += figure(ART / "exemplos_erros.jpg", 16.5, "Exemplos de erros do modelo no teste (real × previsto).")
+    st += figure(ART / "exemplos_erros.jpg", 16.5, "Exemplos de erros no teste, por tipo, começando pelo mais grave (perigo previsto como seguro).")
     st += [p("A comparação com a regressão logística mostra que a CNN aprende padrões espaciais (tamanho e posição do "
              "obstáculo) que um modelo linear sobre pixels não consegue captar.")]
 
@@ -393,8 +416,8 @@ def main() -> None:
     st += [p("9. Maquete", "h1"),
            p("Testamos o rotulador (OWLv2) em fotos da maquete: ele reconhece os cones listrados, a barreira, a lata, "
              "o pote, o boneco e a planta mesmo em miniatura. Por isso as fotos da maquete podem entrar no pipeline "
-             "sem rotulagem manual: basta colocá-las em <font name='Courier'>data/maquete/sem_rotulo/</font> e rodar "
-             "o pipeline de novo.")]
+             "sem rotulagem manual: basta colocar vídeos em <font name='Courier'>data/maquete/videos/</font> (ou fotos "
+             "em <font name='Courier'>data/maquete/sem_rotulo/</font>) e rodar o pipeline de novo.")]
     st += figure(ART / "maquete_deteccao.jpg", 16.5, "Detecções do OWLv2 nas fotos da maquete.")
     frames = [r for r in labels_maq if r["arquivo"].startswith("video")]
     if frames:
@@ -415,10 +438,10 @@ def main() -> None:
                  + (" Os trechos sorteados para o teste não tinham nenhum quadro de perigo, então ainda não dá para "
                     "medir a detecção de perigo na maquete; mais vídeos aproximando-se dos obstáculos resolvem isso."
                     if maq_eval and maq_eval.get("revocacao_perigo") is None else ""))]
-    st += [p("Para melhorar ainda mais, vale gravar mais vídeos do ponto de vista do boneco (celular em pé na "
-             "calçada, olhando para frente), aproximando-se devagar de cada obstáculo e também com o caminho livre.")]
 
     # --------------------------------------------------------- 10. limitações
+    real_m = (real_eval or {}).get("matriz_confusao") or [[0, 0, 0]] * 3
+    fp_real, n_safe_real = real_m[0][2], sum(real_m[0])
     st += [p("10. Limitações e próximos passos", "h1"),
            p("• Os rótulos das fotos reais vêm de um detector automático e têm algum ruído (objetos não detectados ou "
              "detectados por engano). Descartar os casos ambíguos reduz, mas não elimina esse ruído.<br/>"
@@ -430,9 +453,20 @@ def main() -> None:
              "Fotos da maquete a meia distância ajudam a corrigir isso.<br/>"
              "• Com o limiar de perigo mais baixo, o modelo dá mais alarmes falsos em cenas seguras: é uma escolha "
              "consciente de priorizar a segurança.<br/>"
-             "• Próximo passo: incluir mais fotos da maquete do ponto de vista do usuário e medir o desempenho "
-             "separadamente nelas.<br/>"
-             "• É um protótipo acadêmico: não substitui bengala, cão-guia ou orientação profissional.")]
+             f"• Nas fotos reais da internet, o modelo tende a dar alarme: {num(fp_real)} das "
+             f"{num(n_safe_real)} cenas seguras foram classificadas como perigo.<br/>"
+             "• Os trechos de vídeo sorteados para o teste da maquete não tinham nenhum caso de perigo; ainda não "
+             "medimos a detecção de perigo na maquete.<br/>"
+             "• O rotulador não reconhece o posto de gasolina laranja da maquete; quadros com ele de perto ficaram "
+             "como seguro.<br/>"
+             "• É um protótipo acadêmico: não substitui bengala, cão-guia ou orientação profissional."),
+           p("Próximos passos", "h2"),
+           p("1. Gravar mais vídeos do ponto de vista do boneco, aproximando-se de cada obstáculo até quase encostar, "
+             "para ter casos de <b>perigo</b> e <b>atenção</b> da maquete também no teste.<br/>"
+             "2. Revisar manualmente uma amostra dos rótulos automáticos para medir o erro do rotulador.<br/>"
+             "3. Usar várias imagens seguidas da câmera (e não uma só) para estimar se o obstáculo está se "
+             "aproximando, retomando a ideia original de velocidade de aproximação.<br/>"
+             "4. Testar o app com usuários em ambiente controlado e medir atraso e alarmes falsos.")]
 
     # --------------------------------------------------------------- 11. uso
     st += [p("11. Como executar", "h1"),
@@ -447,7 +481,8 @@ def main() -> None:
              "• Kuznetsova et al. The Open Images Dataset V4/V7, Google.<br/>"
              "• Junhan0518/Traffic_Cone, Hugging Face Datasets (Apache-2.0).<br/>"
              "• Minderer et al. Scaling Open-Vocabulary Object Detection (OWLv2), Google.<br/>"
-             "• TensorFlow / Keras e TensorFlow.js; scikit-learn (divisão e métricas).", "small")]
+             "• TensorFlow / Keras e TensorFlow.js (treino e app); scikit-learn (divisão e métricas); "
+             "PyTorch e Hugging Face Transformers (rotulador); OpenCV (vídeos); ReportLab (este relatório).", "small")]
 
     doc.build(st, onFirstPage=on_page, onLaterPages=on_page)
     print(f"Relatório salvo em {OUT}")
