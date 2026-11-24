@@ -21,3 +21,5 @@ data/treino.log
 data/maquete/videos/
 data/rotular_maquete.sh
 data/rotulagem_maquete.log
+# Espelho da pasta do Drive (os arquivos novos são copiados para videos/ e sem_rotulo/).
+data/maquete/drive/
