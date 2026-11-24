@@ -7,6 +7,7 @@ PY=".venv/bin/python"
 [ -x "$PY" ] || { echo "Crie o ambiente antes (veja o README): python3.12 -m venv .venv"; exit 1; }
 
 echo "== 1. Coleta de dados =="                 && $PY ml/1_coleta_dados.py
+echo "== 1b. Quadros dos vídeos da maquete ==" && $PY ml/1b_quadros_dos_videos.py
 if [ -f data/rotulos_automaticos.csv ] && [ "${REROTULAR:-0}" != "1" ]; then
   echo "== 2. Rotulagem automática: já feita (REROTULAR=1 para refazer) =="
 else

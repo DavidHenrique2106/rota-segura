@@ -1,29 +1,32 @@
-AVALIAÇÃO NO CONJUNTO DE TESTE (840 imagens nunca vistas no treino)
-Regra de decisão: 'perigo' quando P(perigo) >= 0.30 (escolhido na validação: maior F1 médio com revocação de perigo >= 0,75).
-Sem limiar (classe mais provável): acurácia 0.723, revocação de perigo 0.604
+AVALIAÇÃO NO CONJUNTO DE TESTE (900 imagens nunca vistas no treino)
+Regra de decisão: 'perigo' quando P(perigo) >= 0.35 (escolhido na validação: maior F1 médio com revocação de perigo >= 0,75).
+Sem limiar (classe mais provável): acurácia 0.739, revocação de perigo 0.689
 
               precision    recall  f1-score   support
 
-      seguro      0.627     0.671     0.648       280
-     atencao      0.915     0.729     0.811       280
-      perigo      0.675     0.764     0.717       280
+      seguro      0.742     0.584     0.653       339
+     atencao      0.845     0.797     0.821       281
+      perigo      0.617     0.811     0.701       280
 
-    accuracy                          0.721       840
-   macro avg      0.739     0.721     0.725       840
-weighted avg      0.739     0.721     0.725       840
+    accuracy                          0.721       900
+   macro avg      0.735     0.731     0.725       900
+weighted avg      0.735     0.721     0.720       900
 
 Matriz de confusão (linhas = real, colunas = previsto; ordem seguro, atencao, perigo):
-[[188  10  82]
- [ 55 204  21]
- [ 57   9 214]]
+[[198  27 114]
+ [ 30 224  27]
+ [ 39  14 227]]
 
 Acurácia da CNN:                          0.721
-Acurácia do modelo de base (reg. logística): 0.368
-Revocação de 'perigo':                    0.764
-Casos de 'perigo' previstos como 'seguro': 57
+Acurácia do modelo de base (reg. logística): 0.360
+Revocação de 'perigo':                    0.811
+Casos de 'perigo' previstos como 'seguro': 39
 
-Só fotos reais (355 imagens): acurácia 0.625, revocação de perigo 0.704
-  matriz: [[122, 2, 72], [9, 0, 8], [41, 1, 100]]
+Só fotos reais (355 imagens): acurácia 0.558, revocação de perigo 0.753
+  matriz: [[91, 8, 97], [5, 0, 12], [32, 3, 107]]
 
-Só montagens (485 imagens): acurácia 0.792, revocação de perigo 0.826
-  matriz: [[66, 8, 10], [46, 204, 13], [16, 8, 114]]
+Só maquete (60 imagens): acurácia 0.883, revocação de perigo sem casos de perigo
+  matriz: [[53, 0, 6], [1, 0, 0], [0, 0, 0]]
+
+Só montagens (485 imagens): acurácia 0.821, revocação de perigo 0.870
+  matriz: [[54, 19, 11], [24, 224, 15], [7, 11, 120]]

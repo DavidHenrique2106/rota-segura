@@ -70,9 +70,13 @@ OBSTACLES = {
     "a pillar": "pilar", "a barrier": "barreira", "a sign post": "placa",
     # Objetos em miniatura da maquete (testado nas fotos de data/maquete/visao_geral).
     "a toy traffic cone": "cone", "a road barrier": "barreira", "a can": "lata", "a jar": "pote",
-    "a toy figure": "boneco", "a toy car": "carro",
+    "a toy figure": "boneco", "a toy car": "carro", "a toy gas station": "posto", "a black jar": "pote",
 }
 QUERIES = list(OBSTACLES)
+# Na maquete (que fica sobre uma mesa) termos genéricos como "table", "plant pot" ou "barrier" marcam a própria
+# base, a sebe ou a calçada. Por isso, nas fotos/vídeos da maquete, procuramos só os objetos que existem nela.
+MAQUETE_QUERIES = ["a toy traffic cone", "a traffic cone", "a road barrier", "a can", "a jar", "a toy figure",
+                   "a toy car", "a toy gas station", "a black jar"]
 SCORE_MIN = 0.28
 CORRIDOR = (0.25, 0.75)  # faixa horizontal por onde a pessoa vai passar
 CLASSES = ("seguro", "atencao", "perigo")
@@ -86,6 +90,17 @@ def square(image: Image.Image, size: int = 256) -> Image.Image:
     side = min(image.size)
     left, top = (image.width - side) // 2, (image.height - side) // 2
     return image.crop((left, top, left + side, top + side)).resize((size, size), Image.LANCZOS)
+
+
+def mostly_tactile_strip(image: Image.Image, box: tuple[float, float, float, float]) -> bool:
+    """Na maquete, o detector às vezes confunde a FAIXA AMARELA TÁTIL com uma barreira/cone.
+    Descarta caixas em que mais de 35% dos pixels são amarelo-vivo (a cor da faixa)."""
+    w, h = image.size
+    x0, y0, x1, y1 = box
+    crop = image.crop((int(x0 * w), int(y0 * h), max(int(x1 * w), int(x0 * w) + 1), max(int(y1 * h), int(y0 * h) + 1)))
+    hsv = np.asarray(crop.convert("HSV")).astype(np.int16)
+    yellow = (hsv[..., 0] >= 28) & (hsv[..., 0] <= 50) & (hsv[..., 1] >= 110) & (hsv[..., 2] >= 120)
+    return float(yellow.mean()) > 0.35
 
 
 def object_level(box: tuple[float, float, float, float]) -> str | None:
@@ -114,8 +129,8 @@ def image_label(levels: list[str]) -> str | None:
     return "seguro"
 
 
-def detect(model, processor, images: list[Image.Image], device: str) -> list[list[tuple]]:
-    inputs = processor(text=[QUERIES] * len(images), images=images, return_tensors="pt").to(device)
+def detect(model, processor, images: list[Image.Image], device: str, queries: list[str] = QUERIES) -> list[list[tuple]]:
+    inputs = processor(text=[queries] * len(images), images=images, return_tensors="pt").to(device)
     with torch.inference_mode():
         outputs = model(**inputs)
     # OWLv2 trabalha numa versão quadrada da imagem; nossas fotos já são quadradas.
@@ -128,7 +143,7 @@ def detect(model, processor, images: list[Image.Image], device: str) -> list[lis
             x0, y0, x1, y1 = (min(max(v, 0.0), 1.0) for v in box)
             if x1 - x0 > 0.95 and y1 - y0 > 0.95:
                 continue  # "objeto" do tamanho da foto inteira: falso positivo típico
-            boxes.append((OBSTACLES[QUERIES[label]], round(score, 3), (x0, y0, x1, y1)))
+            boxes.append((OBSTACLES[queries[label]], round(score, 3), (x0, y0, x1, y1)))
         found.append(boxes)
     return found
 
@@ -174,6 +189,7 @@ def main() -> None:
     processor = Owlv2Processor.from_pretrained(DETECTOR)
     model = Owlv2ForObjectDetection.from_pretrained(DETECTOR).to(device).eval()
 
+    is_maquete = "maquete" in str(args.fotos)
     # Retoma de onde parou: o progresso é gravado a cada lote em um arquivo parcial.
     fields = ["arquivo", "rotulo", "deteccoes"]
     partial = args.saida.with_suffix(".parcial.csv")
@@ -194,9 +210,12 @@ def main() -> None:
     for i in range(0, len(pending), args.lote):
         batch = pending[i:i + args.lote]
         images = [square(Image.open(args.fotos / f)) for f in batch]
-        for name, boxes in zip(batch, detect(model, processor, images, device)):
+        for name, image, boxes in zip(batch, images, detect(model, processor, images, device, MAQUETE_QUERIES if is_maquete else QUERIES)):
             levels, details = [], []
             for obstacle, score, box in boxes:
+                if is_maquete and mostly_tactile_strip(image, box):
+                    details.append(f"faixa_amarela|fora|{','.join(f'{v:.3f}' for v in box)}")
+                    continue
                 level = object_level(box)
                 if level is not None:
                     levels.append(level)

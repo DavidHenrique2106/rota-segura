@@ -17,3 +17,7 @@ data/rotulagem.log
 data/rotular_loop.sh
 data/treinar_loop.sh
 data/treino.log
+# Vídeos originais da maquete (grandes); os quadros extraídos ficam em data/maquete/sem_rotulo/.
+data/maquete/videos/
+data/rotular_maquete.sh
+data/rotulagem_maquete.log

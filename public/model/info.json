@@ -5,10 +5,10 @@
     "perigo"
   ],
   "tamanho_imagem": 160,
-  "acuracia_teste": 0.7214,
-  "revocacao_perigo": 0.7643,
-  "amostras_teste": 840,
-  "limiar_perigo": 0.3,
-  "acuracia_fotos_reais": 0.6254,
+  "acuracia_teste": 0.7211,
+  "revocacao_perigo": 0.8107,
+  "amostras_teste": 900,
+  "limiar_perigo": 0.35,
+  "acuracia_fotos_reais": 0.5577,
   "amostras_fotos_reais": 355
 }
