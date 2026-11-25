@@ -23,3 +23,8 @@ data/rotular_maquete.sh
 data/rotulagem_maquete.log
 # Espelho da pasta do Drive (os arquivos novos são copiados para videos/ e sem_rotulo/).
 data/maquete/drive/
+data/maquete/drive_oficial/
+data/rotular_oficial.sh
+data/rotulagem_oficial.log
+data/bases/
+ml/artefatos/experimentos/

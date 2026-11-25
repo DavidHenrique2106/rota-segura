@@ -12,12 +12,15 @@ from pathlib import Path  # noqa: E402
 
 import tensorflow as tf  # noqa: E402
 
-CLASSES = ("seguro", "atencao", "perigo")  # mesma ordem usada no app (src/App.tsx)
+# Classificação binária pedida pelo professor. Mesma ordem usada no app (src/App.tsx).
+CLASSES = ("sem_obstaculo", "com_obstaculo")
+POSITIVE = CLASSES.index("com_obstaculo")
 IMAGE_SIZE = 160  # o app recorta o centro da câmera em quadrado e reduz para 160x160
 SEED = 42
 
-BASE_DIR = Path("data/base")
-ARTIFACTS_DIR = Path("ml/artefatos")
+# Podem ser trocados por variáveis de ambiente (usado na comparação de fontes de dados).
+BASE_DIR = Path(os.environ.get("ROTA_BASE", "data/base"))
+ARTIFACTS_DIR = Path(os.environ.get("ROTA_ARTEFATOS", "ml/artefatos"))
 MODEL_PATH = ARTIFACTS_DIR / "modelo.keras"
 
 
