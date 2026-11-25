@@ -2,14 +2,14 @@
 
 Treina DO ZERO (pesos aleatórios, sem modelo pré-treinado) uma rede neural
 convolucional (CNN) que recebe a imagem da câmera e devolve a probabilidade de
-cada classe: seguro, atencao, perigo.
+cada classe: sem_obstaculo, com_obstaculo.
 
 Arquitetura (≈ 200 mil parâmetros, leve para rodar no celular):
 
     entrada 160x160x3
     4 blocos [Conv 3x3 -> BatchNorm -> ReLU -> MaxPool]  (16, 32, 64, 96 filtros)
     Conv 3x3 (128) -> GlobalAveragePooling -> Dropout 0.3
-    Dense 64 ReLU -> Dense 3 Softmax
+    Dense 64 ReLU -> Dense 2 Softmax (sem_obstaculo, com_obstaculo)
 
 Durante o treino as imagens recebem pequenas variações aleatórias (espelhamento,
 brilho, contraste, saturação), que imitam celulares e iluminações diferentes. Usamos o conjunto de VALIDAÇÃO
@@ -34,7 +34,7 @@ import time
 
 import numpy as np
 
-from comum import ARTIFACTS_DIR, CLASSES, IMAGE_SIZE, MODEL_PATH, SEED, load_split, tf
+from comum import ARTIFACTS_DIR, BASE_DIR, CLASSES, IMAGE_SIZE, MODEL_PATH, SEED, load_split, tf
 
 
 def augment(image: tf.Tensor, label: tf.Tensor) -> tuple[tf.Tensor, tf.Tensor]:
@@ -122,7 +122,13 @@ def main() -> None:
         tf.keras.callbacks.CSVLogger(str(history_csv)),
     ]
     start = time.time()
-    history = model.fit(train, validation_data=validation, epochs=args.epocas, callbacks=callbacks, verbose=2)
+    # Pesos por classe: se uma classe tiver menos fotos, cada foto dela "vale mais" no treino.
+    counts = [len(list((BASE_DIR / "treino" / c).glob("*.jpg"))) for c in CLASSES]
+    class_weight = {i: sum(counts) / (len(CLASSES) * n) for i, n in enumerate(counts) if n}
+    print("Fotos de treino por classe:", dict(zip(CLASSES, counts)),
+          "| pesos:", {CLASSES[i]: round(w, 2) for i, w in class_weight.items()})
+    history = model.fit(train, validation_data=validation, epochs=args.epocas, callbacks=callbacks, verbose=2,
+                        class_weight=class_weight)
     best = int(np.argmin(history.history["val_loss"]))
     print(
         f"Treino concluído em {time.time() - start:.0f}s. Melhor época: {best + 1} "

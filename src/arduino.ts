@@ -25,7 +25,8 @@ type Device = {
 }
 type BluetoothApi = { requestDevice: (options: object) => Promise<Device> }
 
-export const RISK_CODE = { seguro: 'S', atencao: 'A', perigo: 'P' } as const
+// Com obstáculo -> 'P' (o Arduino apita/vibra como perigo); sem obstáculo -> 'S'.
+export const RISK_CODE = { sem_obstaculo: 'S', com_obstaculo: 'P' } as const
 
 export function bluetoothSupported(): boolean {
   return typeof navigator !== 'undefined' && 'bluetooth' in navigator

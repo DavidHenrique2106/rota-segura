@@ -1,8 +1,7 @@
 """ETAPA 2 - ROTULAGEM AUTOMÁTICA DAS FOTOS REAIS
 
-Rotula as fotos reais coletadas na etapa 1 (data/fontes/fotos_reais) como
-seguro / atencao / perigo, usando um modelo PRÉ-TREINADO de detecção de objetos
-como "rotulador":
+Rotula fotos como COM OBSTÁCULO ou SEM OBSTÁCULO, usando um modelo PRÉ-TREINADO
+de detecção de objetos como "rotulador":
 
     OWLv2 (Google, google/owlv2-base-patch16-ensemble) - detector que entende
     texto: procuramos por "traffic cone", "cardboard box", "person", "chair",
@@ -13,16 +12,14 @@ vai para o app. O modelo do projeto (etapa 5) é uma CNN treinada do zero que
 aprende com esses rótulos. É a técnica de "professor-aluno" (destilação):
 um modelo grande rotula os dados e um modelo pequeno, nosso, aprende com eles.
 
-Regra (a mesma usada na montagem da etapa 4), olhando cada obstáculo detectado
-que esteja no corredor central da imagem (por onde a pessoa vai passar):
+Regra: a câmera olha ao longo da faixa amarela (o caminho). Para cada objeto
+detectado que esteja no CORREDOR CENTRAL da imagem (25% a 75% da largura, por
+onde a pessoa vai passar):
 
-    perigo   obstáculo grande: altura >= 48% da imagem e base na parte de baixo
-             (>= 80%), ou objeto largo (>= 35%) encostado na borda de baixo
-    atencao  obstáculo médio: altura entre 22% e 36%, base entre 60% e 92%
-    seguro   nenhum obstáculo no corredor, ou só obstáculos pequenos (< 13%)
-
-Fotos com obstáculos entre as faixas (ambíguos) são descartadas, para não
-ensinar rótulos duvidosos.
+    com_obstaculo   algum objeto no corredor com altura >= 6% da imagem
+    sem_obstaculo   nenhum objeto no corredor (objetos só nas laterais, ou
+                    pequenos demais para ver, abaixo de 3% da altura)
+    descartada      só há objetos de 3% a 6% da altura no corredor (ambíguo)
 
 Também rotula as fotos da MAQUETE tiradas pelo grupo, sem precisar rotular à
 mão: coloque-as em data/maquete/sem_rotulo/ e rode
@@ -31,12 +28,14 @@ mão: coloque-as em data/maquete/sem_rotulo/ e rode
 recortadas no quadrado central antes da detecção, igual ao que o app analisa.
 
 Saída:
-    data/rotulos_automaticos.csv
-    ml/artefatos/rotulagem_<classe>.jpg   (amostras com as detecções desenhadas,
-                                           para conferência visual)
+    data/rotulos_automaticos.csv           (fotos públicas)
+    data/rotulos_oficial.csv               (base oficial: --fotos data/maquete/oficial)
+    ml/artefatos/rotulagem_*_<classe>.jpg  (amostras com as detecções desenhadas)
 
 Uso (precisa de ml/requirements-rotulagem.txt):
-    python ml/2_rotulagem_automatica.py
+    python ml/2_rotulagem_automatica.py --fotos data/maquete/oficial --saida data/rotulos_oficial.csv
+    python ml/2_rotulagem_automatica.py --recalcular data/rotulos_automaticos.csv
+        (refaz só os rótulos a partir das detecções já guardadas, sem rodar o detector)
 """
 
 from __future__ import annotations
@@ -79,7 +78,9 @@ MAQUETE_QUERIES = ["a toy traffic cone", "a traffic cone", "a road barrier", "a 
                    "a toy car", "a toy gas station", "a black jar"]
 SCORE_MIN = 0.28
 CORRIDOR = (0.25, 0.75)  # faixa horizontal por onde a pessoa vai passar
-CLASSES = ("seguro", "atencao", "perigo")
+CLASSES = ("sem_obstaculo", "com_obstaculo")
+MIN_OBSTACLE = 0.06  # altura mínima (fração da imagem) para contar como obstáculo
+MIN_VISIBLE = 0.03   # abaixo disso o objeto é pequeno/distante demais e não conta
 
 
 def square(image: Image.Image, size: int = 256) -> Image.Image:
@@ -103,30 +104,45 @@ def mostly_tactile_strip(image: Image.Image, box: tuple[float, float, float, flo
     return float(yellow.mean()) > 0.35
 
 
-def object_level(box: tuple[float, float, float, float]) -> str | None:
-    """Nível de risco de UM obstáculo (coordenadas normalizadas 0..1)."""
+def object_level(box: tuple[float, float, float, float]) -> str:
+    """Classifica UM objeto detectado (coordenadas normalizadas 0..1)."""
     x0, y0, x1, y1 = box
     overlap = max(0.0, min(x1, CORRIDOR[1]) - max(x0, CORRIDOR[0]))
-    if overlap < 0.25 * (CORRIDOR[1] - CORRIDOR[0]):
-        return None  # fora do caminho (nas laterais)
-    height, width, bottom = y1 - y0, x1 - x0, y1
-    if (height >= 0.48 and bottom >= 0.80) or (bottom >= 0.97 and width >= 0.35):
-        return "perigo"
-    if 0.22 <= height < 0.36 and 0.60 <= bottom < 0.92:
-        return "atencao"
-    if height < 0.13:
-        return "seguro"
-    return "ambiguo"
+    # No caminho = pelo menos metade do objeto dentro do corredor (vale para objetos pequenos e grandes).
+    if overlap < 0.5 * max(x1 - x0, 1e-6) and overlap < 0.25 * (CORRIDOR[1] - CORRIDOR[0]):
+        return "fora"        # nas laterais, fora do caminho
+    height = y1 - y0
+    if height >= MIN_OBSTACLE:
+        return "obstaculo"
+    if height >= MIN_VISIBLE:
+        return "ambiguo"
+    return "pequeno"
 
 
 def image_label(levels: list[str]) -> str | None:
-    if "perigo" in levels:
-        return "perigo"
+    if "obstaculo" in levels:
+        return "com_obstaculo"
     if "ambiguo" in levels:
         return None
-    if "atencao" in levels:
-        return "atencao"
-    return "seguro"
+    return "sem_obstaculo"
+
+
+def relabel(csv_path: Path) -> list[dict]:
+    """Recalcula os rótulos a partir das detecções guardadas no CSV (sem rodar o detector)."""
+    with csv_path.open(newline="", encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
+    for row in rows:
+        levels, details = [], []
+        for item in filter(None, row["deteccoes"].split(";")):
+            name, old_level, coords = item.split("|")
+            box = tuple(float(v) for v in coords.split(","))
+            level = "fora" if name == "faixa_amarela" else object_level(box)
+            if name != "faixa_amarela":
+                levels.append(level)
+            details.append(f"{name}|{level}|{coords}")
+        row["rotulo"] = image_label(levels) or "descartada"
+        row["deteccoes"] = ";".join(details)
+    return rows
 
 
 def detect(model, processor, images: list[Image.Image], device: str, queries: list[str] = QUERIES) -> list[list[tuple]]:
@@ -164,7 +180,7 @@ def review_sheet(rows: list[dict], photos: Path, label: str, output: Path, count
         for item in filter(None, row["deteccoes"].split(";")):
             name, level, coords = item.split("|")
             x0, y0, x1, y1 = (float(v) * cell for v in coords.split(","))
-            color = {"perigo": "red", "atencao": "orange", "seguro": "lime"}.get(level, "white")
+            color = {"obstaculo": "red", "ambiguo": "orange", "pequeno": "lime"}.get(level, "white")
             draw.rectangle((x0, y0, x1, y1), outline=color, width=2)
             draw.text((x0 + 2, y0 + 2), name, fill=color)
         sheet.paste(image, ((n % columns) * cell, (n // columns) * cell))
@@ -176,9 +192,25 @@ def main() -> None:
     parser.add_argument("--fotos", type=Path, default=Path("data/fontes/fotos_reais"))
     parser.add_argument("--saida", type=Path, default=Path("data/rotulos_automaticos.csv"))
     parser.add_argument("--lote", type=int, default=4)
+    parser.add_argument("--recalcular", type=Path, help="CSV já rotulado: refaz só os rótulos com a regra atual")
     parser.add_argument("--limite", type=int, default=600,
                         help="máximo de fotos por execução; rode de novo para continuar (evita acúmulo de memória da GPU)")
     args = parser.parse_args()
+
+    if args.recalcular:
+        rows = relabel(args.recalcular)
+        with args.recalcular.open("w", newline="", encoding="utf-8") as out:
+            writer = csv.DictWriter(out, fieldnames=["arquivo", "rotulo", "deteccoes"])
+            writer.writeheader()
+            writer.writerows(rows)
+        photos = Path("data/fontes/fotos_reais") if "automaticos" in args.recalcular.name else \
+            Path("data/maquete/sem_rotulo") if "maquete" in args.recalcular.name else Path("data/maquete/oficial")
+        prefix = "rotulagem_" + args.recalcular.stem.replace("rotulos_", "")
+        for label in CLASSES:
+            review_sheet(rows, photos, label, Path("ml/artefatos") / f"{prefix}_{label}.jpg")
+        counts = {label: sum(r["rotulo"] == label for r in rows) for label in (*CLASSES, "descartada")}
+        print(f"Rótulos recalculados em {args.recalcular}: {counts}")
+        return
 
     files = sorted(p.name for p in args.fotos.iterdir()
                    if p.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp", ".heic"})
@@ -217,9 +249,8 @@ def main() -> None:
                     details.append(f"faixa_amarela|fora|{','.join(f'{v:.3f}' for v in box)}")
                     continue
                 level = object_level(box)
-                if level is not None:
-                    levels.append(level)
-                details.append(f"{obstacle}|{level or 'fora'}|{','.join(f'{v:.3f}' for v in box)}")
+                levels.append(level)
+                details.append(f"{obstacle}|{level}|{','.join(f'{v:.3f}' for v in box)}")
             label = image_label(levels)
             row = {"arquivo": name, "rotulo": label or "descartada", "deteccoes": ";".join(details)}
             rows.append(row)
@@ -244,7 +275,7 @@ def main() -> None:
 
     artifacts = Path("ml/artefatos")
     artifacts.mkdir(parents=True, exist_ok=True)
-    prefix = "rotulagem_maquete" if "maquete" in str(args.fotos) else "rotulagem"
+    prefix = "rotulagem_" + args.saida.stem.replace("rotulos_", "")
     for label in CLASSES:
         review_sheet(rows, args.fotos, label, artifacts / f"{prefix}_{label}.jpg")
     counts = {label: sum(r["rotulo"] == label for r in rows) for label in (*CLASSES, "descartada")}

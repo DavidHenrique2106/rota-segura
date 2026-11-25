@@ -4,17 +4,16 @@ import type { LayersModel } from '@tensorflow/tfjs'
 import { ArduinoLink, bluetoothSupported, RISK_CODE } from './arduino'
 import { AlertTriangle, Bluetooth, BluetoothConnected, Camera, Check, CircleHelp, Download, Eye, ImagePlus, LoaderCircle, Radio, ShieldCheck, Volume2, VolumeX, Vibrate, X } from 'lucide-react'
 
-const CLASSES = ['seguro', 'atencao', 'perigo'] as const
+const CLASSES = ['sem_obstaculo', 'com_obstaculo'] as const  // mesma ordem de ml/comum.py
 const IMAGE_SIZE = 160 // mesmo tamanho usado no treino (ml/comum.py)
-type ModelInfo = { acuracia_teste?: number; revocacao_perigo?: number; amostras_teste?: number; acuracia_fotos_reais?: number; limiar_perigo?: number }
+type ModelInfo = { acuracia_teste?: number; acuracia_balanceada?: number; revocacao_obstaculo?: number; amostras_teste?: number; limiar_obstaculo?: number }
 type Risk = (typeof CLASSES)[number]
 type Mode = 'monitor' | 'collect'
 
-const LABELS: Record<Risk, string> = { seguro: 'Caminho livre', atencao: 'Atenção', perigo: 'Perigo próximo' }
+const LABELS: Record<Risk, string> = { sem_obstaculo: 'Caminho livre', com_obstaculo: 'Obstáculo à frente' }
 const RISK_COPY: Record<Risk, string> = {
-  seguro: 'A análise não identificou risco alto neste quadro.',
-  atencao: 'Há algo no caminho. Reduza o ritmo e confira o ambiente.',
-  perigo: 'Obstáculo próximo. Pare e confirme com seus recursos habituais.',
+  sem_obstaculo: 'Nenhum objeto no caminho à frente.',
+  com_obstaculo: 'Há um objeto no caminho. Pare e confirme com seus recursos habituais.',
 }
 
 function makeSessionId() {
@@ -35,7 +34,7 @@ export default function App() {
   const [modelState, setModelState] = useState<'loading' | 'ready' | 'missing'>('loading')
   const [cameraMessage, setCameraMessage] = useState('A câmera ainda não foi iniciada.')
   const [alertMessage, setAlertMessage] = useState('Alertas habilitados após iniciar a câmera.')
-  const [captureLabel, setCaptureLabel] = useState<Risk>('seguro')
+  const [captureLabel, setCaptureLabel] = useState<Risk>('com_obstaculo')
   const [sessionId] = useState(makeSessionId)
   const [soundOn, setSoundOn] = useState(true)
   const [vibrationOn, setVibrationOn] = useState(true)
@@ -60,7 +59,7 @@ export default function App() {
     fetch('/model/info.json')
       .then((response) => (response.ok ? response.json() : null))
       .then((info: ModelInfo | null) => {
-        if (active && info) { setModelInfo(info); dangerThreshold.current = info.limiar_perigo ?? null }
+        if (active && info) { setModelInfo(info); dangerThreshold.current = info.limiar_obstaculo ?? null }
       })
       .catch(() => undefined)
     return () => {
@@ -131,17 +130,14 @@ export default function App() {
       prediction.dispose()
       // Regra de decisão da avaliação (ml/6_avaliacao.py): "perigo" quando P(perigo) passa do limiar
       // escolhido na validação; senão, a classe mais provável entre seguro e atenção.
-      const dangerIndex = CLASSES.indexOf('perigo')
-      const threshold = dangerThreshold.current
-      let maxIndex = values.indexOf(Math.max(...Array.from(values)))
-      if (threshold !== null) {
-        maxIndex = values[dangerIndex] >= threshold ? dangerIndex : (values[0] >= values[1] ? 0 : 1)
-      }
-      const nextRisk = CLASSES[maxIndex] ?? 'atencao'
+      const obstacleIndex = CLASSES.indexOf('com_obstaculo')
+      const threshold = dangerThreshold.current ?? 0.5
+      const maxIndex = values[obstacleIndex] >= threshold ? obstacleIndex : 1 - obstacleIndex
+      const nextRisk = CLASSES[maxIndex]
       setRisk(nextRisk)
       setConfidence(values[maxIndex] ?? 0)
       void linkRef.current?.send(RISK_CODE[nextRisk])  // o Arduino apita/acende conforme o risco
-      if (previousRisk.current !== nextRisk || (nextRisk === 'perigo' && Date.now() - lastAlertAt.current > 3000)) {
+      if (previousRisk.current !== nextRisk || (nextRisk === 'com_obstaculo' && Date.now() - lastAlertAt.current > 3000)) {
         announceRisk(nextRisk)
       }
       previousRisk.current = nextRisk
@@ -173,24 +169,24 @@ export default function App() {
   }
 
   function announceRisk(nextRisk: Risk) {
-    if (nextRisk === 'seguro') {
+    if (nextRisk === 'sem_obstaculo') {
       setAlertMessage('Nenhum alerta de risco alto neste momento.')
       return
     }
     lastAlertAt.current = Date.now()
     setAlertMessage(RISK_COPY[nextRisk])
-    if (vibrationOn && 'vibrate' in navigator) navigator.vibrate(nextRisk === 'perigo' ? [250, 120, 350] : [180])
+    if (vibrationOn && 'vibrate' in navigator) navigator.vibrate([250, 120, 350])
     if (soundOn) {
       const audio = new AudioContext()
       const oscillator = audio.createOscillator()
       const gain = audio.createGain()
       oscillator.type = 'sine'
-      oscillator.frequency.value = nextRisk === 'perigo' ? 880 : 540
+      oscillator.frequency.value = 880
       gain.gain.value = 0.12
       oscillator.connect(gain)
       gain.connect(audio.destination)
       oscillator.start()
-      oscillator.stop(audio.currentTime + (nextRisk === 'perigo' ? 0.42 : 0.18))
+      oscillator.stop(audio.currentTime + (0.42))
       oscillator.onended = () => { void audio.close() }
     }
   }
@@ -223,7 +219,7 @@ export default function App() {
     window.setTimeout(() => setBusy(false), 350)
   }
 
-  const riskClass = risk ?? 'unknown'
+  const riskClass = risk === 'com_obstaculo' ? 'perigo' : risk === 'sem_obstaculo' ? 'seguro' : 'unknown'
 
   return (
     <main className="app-shell">
@@ -260,7 +256,7 @@ export default function App() {
 
           {mode === 'monitor' ? <>
             <div className={`risk-panel risk-${riskClass}`} aria-live="polite">
-              <div className="risk-heading"><span className="risk-icon">{risk === 'seguro' ? <ShieldCheck size={23} /> : risk ? <AlertTriangle size={23} /> : <Eye size={22} />}</span><span className="risk-caption">CLASSIFICAÇÃO ATUAL</span></div>
+              <div className="risk-heading"><span className="risk-icon">{risk === 'sem_obstaculo' ? <ShieldCheck size={23} /> : risk ? <AlertTriangle size={23} /> : <Eye size={22} />}</span><span className="risk-caption">CLASSIFICAÇÃO ATUAL</span></div>
               <strong className="risk-title">{risk ? LABELS[risk] : modelState === 'ready' ? 'Aguardando imagem' : 'Modelo não treinado'}</strong>
               <p>{risk ? RISK_COPY[risk] : modelState === 'ready' ? 'Inicie a câmera para analisar o percurso.' : 'Rode bash ml/executar_tudo.sh para treinar e exportar o modelo.'}</p>
               {risk && <div className="confidence"><div><span>Confiança do modelo</span><strong>{Math.round(confidence * 100)}%</strong></div><div className="confidence-track"><span style={{ width: `${Math.round(confidence * 100)}%` }} /></div></div>}
@@ -280,7 +276,7 @@ export default function App() {
 
       {modelState === 'missing' && <section className="model-notice"><div className="notice-mark"><LoaderCircle size={18} /></div><p><strong>O modelo ainda não está no app.</strong> Rode <code>bash ml/executar_tudo.sh</code> (ou as etapas 1 a 6) para coletar dados, treinar e exportar o modelo para <code>public/model</code>.</p><span>ML / ARTIFACTS → PUBLIC / MODEL</span></section>}
 
-      <section className="workflow-strip"><div className="workflow-heading"><p className="eyebrow">DO DADO AO ALERTA</p><h2>O processo do projeto</h2></div><div className="workflow-steps"><div><span>01</span><strong>Coletar</strong><small>Fotos reais de obstáculos e caminhos</small></div><div><span>02</span><strong>Rotular</strong><small>Detector pronto marca os obstáculos</small></div><div><span>03</span><strong>Treinar</strong><small>CNN própria, criada do zero</small></div><div><span>04</span><strong>Avaliar</strong><small>{modelInfo?.acuracia_teste ? `${Math.round(modelInfo.acuracia_teste * 100)}% de acerto${modelInfo.acuracia_fotos_reais ? ` · ${Math.round(modelInfo.acuracia_fotos_reais * 100)}% em fotos reais` : ''} · ${Math.round((modelInfo.revocacao_perigo ?? 0) * 100)}% dos perigos detectados` : 'Teste e matriz de confusão'}</small></div></div></section>
+      <section className="workflow-strip"><div className="workflow-heading"><p className="eyebrow">DO DADO AO ALERTA</p><h2>O processo do projeto</h2></div><div className="workflow-steps"><div><span>01</span><strong>Coletar</strong><small>Fotos da maquete (base oficial)</small></div><div><span>02</span><strong>Rotular</strong><small>Detector pronto marca os obstáculos</small></div><div><span>03</span><strong>Treinar</strong><small>CNN própria, criada do zero</small></div><div><span>04</span><strong>Avaliar</strong><small>{modelInfo?.acuracia_teste ? `${Math.round(modelInfo.acuracia_teste * 100)}% de acerto na maquete · ${Math.round((modelInfo.revocacao_obstaculo ?? 0) * 100)}% dos obstáculos detectados` : 'Teste e matriz de confusão'}</small></div></div></section>
 
       <footer className="disclaimer" id="limites"><span className="disclaimer-mark"><AlertTriangle size={16} /></span><p><strong>Protótipo para demonstração acadêmica.</strong> Não é um dispositivo de navegação seguro nem substitui bengala, cão-guia ou orientação profissional. A câmera pode falhar, e a classificação não mede distância real. Teste somente em ambiente controlado, com acompanhamento.</p><span className="course-code">2026.2 · NSIN-0104</span></footer>
     </main>

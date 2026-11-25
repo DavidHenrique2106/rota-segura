@@ -51,6 +51,36 @@ def split(files: list[str]) -> dict[str, list[str]]:
     return {"treino": sorted(train), "validacao": sorted(validation), "teste": sorted(test)}
 
 
+def group_of_official(name: str) -> str:
+    """Fotos em rajada (IMG_..._BURST12.jpg) formam um grupo; foto avulsa é um grupo sozinha."""
+    return re.sub(r"_BURST\d+.*$", "", Path(name).stem)
+
+
+def group_split(items: list[tuple[str, str]], group_fn) -> dict[str, list[list[str]]]:
+    """Divide por GRUPO (rajada / trecho de vídeo) em 70/15/15, garantindo pelo menos um grupo na
+    validação e no teste e, se possível, as duas classes em cada parte."""
+    groups = sorted({group_fn(f) for f, _ in items})
+    best = None
+    for attempt in range(200):
+        shuffled = groups[:]
+        random.Random(SEED + attempt).shuffle(shuffled)
+        n = len(shuffled)
+        n_val = max(1, round(n * 0.15)) if n >= 3 else 0
+        n_test = max(1, round(n * 0.15)) if n >= 3 else 0
+        n_train = n - n_val - n_test
+        part_of = {g: "treino" for g in shuffled[:n_train]}
+        part_of.update({g: "validacao" for g in shuffled[n_train:n_train + n_val]})
+        part_of.update({g: "teste" for g in shuffled[n_train + n_val:]})
+        parts = {"treino": [], "validacao": [], "teste": []}
+        for f, label in items:
+            parts[part_of[group_fn(f)]].append([f, label])
+        both = all({label for _, label in parts[p]} >= set(CLASSES) for p in ("validacao", "teste"))
+        best = best or parts
+        if both:
+            return parts
+    return best
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--fontes", type=Path, default=Path("data/fontes"))
@@ -74,6 +104,15 @@ def main() -> None:
     validation, test = train_test_split(rest, test_size=0.50, random_state=SEED, stratify=rest_labels)
     division["fotos_reais"] = {"treino": sorted(train), "validacao": sorted(validation), "teste": sorted(test)}
 
+    # BASE OFICIAL: fotos do grupo no Drive (etapa 1c), rotuladas pela etapa 2 e divididas por RAJADA.
+    official_csv = Path("data/rotulos_oficial.csv")
+    if official_csv.exists():
+        with official_csv.open(newline="", encoding="utf-8") as handle:
+            official = [(f"oficial/{r['arquivo']}", r["rotulo"]) for r in csv.DictReader(handle) if r["rotulo"] in CLASSES]
+        division["oficial"] = group_split(official, group_of_official)
+        n_groups = len({group_of_official(f) for f, _ in official})
+        print(f"Base oficial: {len(official)} fotos em {n_groups} rajadas/grupos")
+
     # Fotos da maquete: rotuladas à mão (data/maquete/<classe>/) ou pela etapa 2
     # (data/maquete/sem_rotulo/ -> data/rotulos_maquete.csv). Guardadas como [arquivo, rótulo].
     maquete = Path("data/maquete")
@@ -94,16 +133,10 @@ def main() -> None:
     frames = [(f, label) for f, label in own_photos if re.match(r"sem_rotulo/video\d+_t\d+_q", f)]
     own_photos = [item for item in own_photos if item not in frames]
     if frames:
-        groups = sorted({re.match(r"sem_rotulo/(video\d+_t\d+)_", f).group(1) for f, _ in frames})
-        random.Random(SEED).shuffle(groups)
-        n_train, n_val = round(len(groups) * 0.70), round(len(groups) * 0.15)
-        part_of = {g: "treino" for g in groups[:n_train]}
-        part_of.update({g: "validacao" for g in groups[n_train:n_train + n_val]})
-        part_of.update({g: "teste" for g in groups[n_train + n_val:]})
-        for f, label in frames:
-            own[part_of[re.match(r"sem_rotulo/(video\d+_t\d+)_", f).group(1)]].append([f, label])
-        print(f"Quadros de vídeo: {len(frames)} em {len(groups)} trechos de 5 s "
-              f"({n_train} treino, {n_val} validação, {len(groups) - n_train - n_val} teste)")
+        segment = lambda f: re.match(r"sem_rotulo/(video\d+_t\d+)_", f).group(1)  # noqa: E731
+        for part, chosen in group_split(frames, segment).items():
+            own[part] += chosen
+        print(f"Quadros de vídeo: {len(frames)} em {len({segment(f) for f, _ in frames})} trechos de 5 s")
 
     if own_photos:
         by_label = {label: [p for p in own_photos if p[1] == label] for label in CLASSES}
