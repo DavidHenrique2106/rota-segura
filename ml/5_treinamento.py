@@ -1,29 +1,4 @@
-"""ETAPA 5 - TREINAMENTO DO MODELO
-
-Treina DO ZERO (pesos aleatórios, sem modelo pré-treinado) uma rede neural
-convolucional (CNN) que recebe a imagem da câmera e devolve a probabilidade de
-cada classe: seguro, atencao, perigo.
-
-Arquitetura (≈ 200 mil parâmetros, leve para rodar no celular):
-
-    entrada 160x160x3
-    4 blocos [Conv 3x3 -> BatchNorm -> ReLU -> MaxPool]  (16, 32, 64, 96 filtros)
-    Conv 3x3 (128) -> GlobalAveragePooling -> Dropout 0.3
-    Dense 64 ReLU -> Dense 3 Softmax
-
-Durante o treino as imagens recebem pequenas variações aleatórias (espelhamento,
-brilho, contraste, saturação), que imitam celulares e iluminações diferentes. Usamos o conjunto de VALIDAÇÃO
-para parar o treino na melhor época (EarlyStopping). O conjunto de TESTE não é
-usado aqui.
-
-Saída:
-    ml/artefatos/modelo.keras
-    ml/artefatos/historico_treino.csv
-    ml/artefatos/curvas_treino.png
-
-Uso:
-    python ml/5_treinamento.py [--epocas 40]
-"""
+"""ETAPA 5 - TREINAMENTO DO MODELO"""
 
 from __future__ import annotations
 
@@ -34,13 +9,10 @@ import time
 
 import numpy as np
 
-from comum import ARTIFACTS_DIR, CLASSES, IMAGE_SIZE, MODEL_PATH, SEED, load_split, tf
+from comum import ARTIFACTS_DIR, BASE_DIR, CLASSES, IMAGE_SIZE, MODEL_PATH, SEED, load_split, tf
 
 
 def augment(image: tf.Tensor, label: tf.Tensor) -> tuple[tf.Tensor, tf.Tensor]:
-    # Só variações que NÃO mudam o rótulo: espelhar para os lados e mexer na
-    # cor/luz. Zoom ou deslocamento vertical mudariam o tamanho/posição do
-    # obstáculo, que é justamente o que define a classe.
     image = tf.image.random_flip_left_right(image)
     image = tf.image.random_brightness(image, 0.12)
     image = tf.image.random_contrast(image, 0.8, 1.2)
@@ -54,7 +26,7 @@ def build_model() -> tf.keras.Model:
     x = inputs
     for filters in (16, 32, 64, 96):
         x = layers.Conv2D(filters, 3, padding="same", use_bias=False)(x)
-        x = layers.BatchNormalization()(x)
+        x = layers.BatchNormalization(momentum=0.9)(x)
         x = layers.ReLU()(x)
         x = layers.MaxPooling2D()(x)
     x = layers.Conv2D(128, 3, padding="same", activation="relu")(x)
@@ -117,12 +89,17 @@ def main() -> None:
     model.summary()
     history_csv = ARTIFACTS_DIR / "historico_treino.csv"
     callbacks = [
-        tf.keras.callbacks.EarlyStopping(monitor="val_loss", patience=8, restore_best_weights=True),
-        tf.keras.callbacks.ReduceLROnPlateau(monitor="val_loss", factor=0.5, patience=3, min_lr=1e-5),
+        tf.keras.callbacks.EarlyStopping(monitor="val_loss", patience=10, restore_best_weights=True, start_from_epoch=5),
+        tf.keras.callbacks.ReduceLROnPlateau(monitor="val_loss", factor=0.5, patience=4, min_lr=1e-5),
         tf.keras.callbacks.CSVLogger(str(history_csv)),
     ]
     start = time.time()
-    history = model.fit(train, validation_data=validation, epochs=args.epocas, callbacks=callbacks, verbose=2)
+    counts = [len(list((BASE_DIR / "treino" / c).glob("*.jpg"))) for c in CLASSES]
+    class_weight = {i: sum(counts) / (len(CLASSES) * n) for i, n in enumerate(counts) if n}
+    print("Fotos de treino por classe:", dict(zip(CLASSES, counts)),
+          "| pesos:", {CLASSES[i]: round(w, 2) for i, w in class_weight.items()})
+    history = model.fit(train, validation_data=validation, epochs=args.epocas, callbacks=callbacks, verbose=2,
+                        class_weight=class_weight)
     best = int(np.argmin(history.history["val_loss"]))
     print(
         f"Treino concluído em {time.time() - start:.0f}s. Melhor época: {best + 1} "

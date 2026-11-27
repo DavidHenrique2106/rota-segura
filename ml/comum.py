@@ -4,20 +4,20 @@ from __future__ import annotations
 
 import os
 
-# O conversor TensorFlow.js funciona melhor com o Keras 2 (pacote tf_keras).
 os.environ.setdefault("TF_USE_LEGACY_KERAS", "1")
 os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
 
-from pathlib import Path  # noqa: E402
+from pathlib import Path
 
-import tensorflow as tf  # noqa: E402
+import tensorflow as tf
 
-CLASSES = ("seguro", "atencao", "perigo")  # mesma ordem usada no app (src/App.tsx)
-IMAGE_SIZE = 160  # o app recorta o centro da câmera em quadrado e reduz para 160x160
+CLASSES = ("sem_obstaculo", "com_obstaculo")
+POSITIVE = CLASSES.index("com_obstaculo")
+IMAGE_SIZE = 160
 SEED = 42
 
-BASE_DIR = Path("data/base")
-ARTIFACTS_DIR = Path("ml/artefatos")
+BASE_DIR = Path(os.environ.get("ROTA_BASE", "data/base"))
+ARTIFACTS_DIR = Path(os.environ.get("ROTA_ARTEFATOS", "ml/artefatos"))
 MODEL_PATH = ARTIFACTS_DIR / "modelo.keras"
 
 
@@ -37,5 +37,5 @@ def load_split(split: str, batch_size: int = 32, shuffle: bool = False) -> tf.da
         seed=SEED,
     )
     normalized = dataset.map(lambda x, y: (x / 255.0, y), num_parallel_calls=tf.data.AUTOTUNE)
-    normalized.file_paths = dataset.file_paths  # mesma ordem quando shuffle=False
+    normalized.file_paths = dataset.file_paths
     return normalized

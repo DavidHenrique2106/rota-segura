@@ -1,20 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
 import * as tf from '@tensorflow/tfjs'
 import type { LayersModel } from '@tensorflow/tfjs'
-import { ArduinoLink, bluetoothSupported, RISK_CODE } from './arduino'
-import { AlertTriangle, Bluetooth, BluetoothConnected, Camera, Check, CircleHelp, Download, Eye, ImagePlus, LoaderCircle, Radio, ShieldCheck, Volume2, VolumeX, Vibrate, X } from 'lucide-react'
+import { AlertTriangle, Camera, Check, CircleHelp, Download, Eye, ImagePlus, LoaderCircle, Radio, ShieldCheck, Volume2, VolumeX, Vibrate, X } from 'lucide-react'
 
-const CLASSES = ['seguro', 'atencao', 'perigo'] as const
-const IMAGE_SIZE = 160 // mesmo tamanho usado no treino (ml/comum.py)
-type ModelInfo = { acuracia_teste?: number; revocacao_perigo?: number; amostras_teste?: number; acuracia_fotos_reais?: number; limiar_perigo?: number }
+const CLASSES = ['sem_obstaculo', 'com_obstaculo'] as const
+const IMAGE_SIZE = 160
+type ModelInfo = { acuracia_teste?: number; acuracia_balanceada?: number; revocacao_obstaculo?: number; amostras_teste?: number; limiar_obstaculo?: number }
 type Risk = (typeof CLASSES)[number]
 type Mode = 'monitor' | 'collect'
 
-const LABELS: Record<Risk, string> = { seguro: 'Caminho livre', atencao: 'Atenção', perigo: 'Perigo próximo' }
+const LABELS: Record<Risk, string> = { sem_obstaculo: 'Caminho livre', com_obstaculo: 'Obstáculo à frente' }
 const RISK_COPY: Record<Risk, string> = {
-  seguro: 'A análise não identificou risco alto neste quadro.',
-  atencao: 'Há algo no caminho. Reduza o ritmo e confira o ambiente.',
-  perigo: 'Obstáculo próximo. Pare e confirme com seus recursos habituais.',
+  sem_obstaculo: 'Nenhum objeto no caminho à frente.',
+  com_obstaculo: 'Há um objeto no caminho. Pare e confirme com seus recursos habituais.',
 }
 
 function makeSessionId() {
@@ -28,6 +26,7 @@ export default function App() {
   const modelRef = useRef<LayersModel | null>(null)
   const previousRisk = useRef<Risk | null>(null)
   const lastAlertAt = useRef(0)
+  const audioRef = useRef<AudioContext | null>(null)
   const [cameraOn, setCameraOn] = useState(false)
   const [mode, setMode] = useState<Mode>('monitor')
   const [risk, setRisk] = useState<Risk | null>(null)
@@ -35,17 +34,12 @@ export default function App() {
   const [modelState, setModelState] = useState<'loading' | 'ready' | 'missing'>('loading')
   const [cameraMessage, setCameraMessage] = useState('A câmera ainda não foi iniciada.')
   const [alertMessage, setAlertMessage] = useState('Alertas habilitados após iniciar a câmera.')
-  const [captureLabel, setCaptureLabel] = useState<Risk>('seguro')
+  const [captureLabel, setCaptureLabel] = useState<Risk>('com_obstaculo')
   const [sessionId] = useState(makeSessionId)
   const [soundOn, setSoundOn] = useState(true)
   const [vibrationOn, setVibrationOn] = useState(true)
   const [busy, setBusy] = useState(false)
   const [modelInfo, setModelInfo] = useState<ModelInfo | null>(null)
-  const linkRef = useRef<ArduinoLink | null>(null)
-  const [arduino, setArduino] = useState<'off' | 'connecting' | 'on'>('off')
-  const [distance, setDistance] = useState<number | null>(null)
-  const [arduinoMessage, setArduinoMessage] = useState(
-    bluetoothSupported() ? 'Liga o buzzer, LED e vibração da maquete por Bluetooth.' : 'Bluetooth indisponível neste navegador (use o Chrome no Android ou o Bluefy no iPhone).')
   const dangerThreshold = useRef<number | null>(null)
 
   useEffect(() => {
@@ -60,7 +54,7 @@ export default function App() {
     fetch('/model/info.json')
       .then((response) => (response.ok ? response.json() : null))
       .then((info: ModelInfo | null) => {
-        if (active && info) { setModelInfo(info); dangerThreshold.current = info.limiar_perigo ?? null }
+        if (active && info) { setModelInfo(info); dangerThreshold.current = info.limiar_obstaculo ?? null }
       })
       .catch(() => undefined)
     return () => {
@@ -78,6 +72,7 @@ export default function App() {
   }, [cameraOn, mode, modelState])
 
   async function startCamera() {
+    unlockAudio()
     setCameraMessage('Solicitando acesso à câmera...')
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -111,7 +106,6 @@ export default function App() {
     const video = videoRef.current
     const model = modelRef.current
     if (!video || !model || video.readyState < 2) return
-    // Recorta o quadrado central do vídeo (como no treino) e reduz para 160x160.
     const input = tf.tidy(() => {
       const frame = tf.browser.fromPixels(video)
       const [height, width] = frame.shape
@@ -129,19 +123,13 @@ export default function App() {
       const prediction = model.predict(input) as tf.Tensor
       const values = await prediction.data()
       prediction.dispose()
-      // Regra de decisão da avaliação (ml/6_avaliacao.py): "perigo" quando P(perigo) passa do limiar
-      // escolhido na validação; senão, a classe mais provável entre seguro e atenção.
-      const dangerIndex = CLASSES.indexOf('perigo')
-      const threshold = dangerThreshold.current
-      let maxIndex = values.indexOf(Math.max(...Array.from(values)))
-      if (threshold !== null) {
-        maxIndex = values[dangerIndex] >= threshold ? dangerIndex : (values[0] >= values[1] ? 0 : 1)
-      }
-      const nextRisk = CLASSES[maxIndex] ?? 'atencao'
+      const obstacleIndex = CLASSES.indexOf('com_obstaculo')
+      const threshold = dangerThreshold.current ?? 0.5
+      const maxIndex = values[obstacleIndex] >= threshold ? obstacleIndex : 1 - obstacleIndex
+      const nextRisk = CLASSES[maxIndex]
       setRisk(nextRisk)
       setConfidence(values[maxIndex] ?? 0)
-      void linkRef.current?.send(RISK_CODE[nextRisk])  // o Arduino apita/acende conforme o risco
-      if (previousRisk.current !== nextRisk || (nextRisk === 'perigo' && Date.now() - lastAlertAt.current > 3000)) {
+      if (previousRisk.current !== nextRisk || (nextRisk === 'com_obstaculo' && Date.now() - lastAlertAt.current > 1500)) {
         announceRisk(nextRisk)
       }
       previousRisk.current = nextRisk
@@ -152,47 +140,39 @@ export default function App() {
     }
   }
 
-  async function connectArduino() {
-    if (arduino === 'on') { linkRef.current?.disconnect(); return }
-    setArduino('connecting')
-    setArduinoMessage('Escolha o dispositivo "RotaSegura" (ESP32) ou "HMSoft" (HM-10) na lista.')
-    const link = new ArduinoLink(
-      (cm) => setDistance(cm),
-      () => { linkRef.current = null; setArduino('off'); setDistance(null); setArduinoMessage('Arduino desconectado.') },
-    )
+  function unlockAudio() {
     try {
-      await link.connect()
-      linkRef.current = link
-      setArduino('on')
-      setArduinoMessage(`Conectado a ${link.name}. O Arduino recebe o risco a cada análise.`)
-    } catch (error) {
-      setArduino('off')
-      const message = error instanceof Error ? error.message : ''
-      setArduinoMessage(message.includes('cancel') ? 'Conexão cancelada.' : `Não foi possível conectar: ${message || 'verifique se o Bluetooth está ligado.'}`)
+      if (!audioRef.current) audioRef.current = new AudioContext()
+      if (audioRef.current.state === 'suspended') void audioRef.current.resume()
+    } catch { audioRef.current = null }
+  }
+
+  function beep() {
+    const audio = audioRef.current
+    if (!audio) return
+    for (let i = 0; i < 2; i++) {
+      const oscillator = audio.createOscillator()
+      const gain = audio.createGain()
+      oscillator.type = 'square'
+      oscillator.frequency.value = 1100
+      gain.gain.value = 0.25
+      oscillator.connect(gain)
+      gain.connect(audio.destination)
+      const start = audio.currentTime + i * 0.22
+      oscillator.start(start)
+      oscillator.stop(start + 0.15)
     }
   }
 
   function announceRisk(nextRisk: Risk) {
-    if (nextRisk === 'seguro') {
+    if (nextRisk === 'sem_obstaculo') {
       setAlertMessage('Nenhum alerta de risco alto neste momento.')
       return
     }
     lastAlertAt.current = Date.now()
     setAlertMessage(RISK_COPY[nextRisk])
-    if (vibrationOn && 'vibrate' in navigator) navigator.vibrate(nextRisk === 'perigo' ? [250, 120, 350] : [180])
-    if (soundOn) {
-      const audio = new AudioContext()
-      const oscillator = audio.createOscillator()
-      const gain = audio.createGain()
-      oscillator.type = 'sine'
-      oscillator.frequency.value = nextRisk === 'perigo' ? 880 : 540
-      gain.gain.value = 0.12
-      oscillator.connect(gain)
-      gain.connect(audio.destination)
-      oscillator.start()
-      oscillator.stop(audio.currentTime + (nextRisk === 'perigo' ? 0.42 : 0.18))
-      oscillator.onended = () => { void audio.close() }
-    }
+    if (vibrationOn && 'vibrate' in navigator) navigator.vibrate([250, 120, 350])
+    if (soundOn) beep()
   }
 
   function captureImage() {
@@ -223,7 +203,7 @@ export default function App() {
     window.setTimeout(() => setBusy(false), 350)
   }
 
-  const riskClass = risk ?? 'unknown'
+  const riskClass = risk === 'com_obstaculo' ? 'perigo' : risk === 'sem_obstaculo' ? 'seguro' : 'unknown'
 
   return (
     <main className="app-shell">
@@ -260,12 +240,12 @@ export default function App() {
 
           {mode === 'monitor' ? <>
             <div className={`risk-panel risk-${riskClass}`} aria-live="polite">
-              <div className="risk-heading"><span className="risk-icon">{risk === 'seguro' ? <ShieldCheck size={23} /> : risk ? <AlertTriangle size={23} /> : <Eye size={22} />}</span><span className="risk-caption">CLASSIFICAÇÃO ATUAL</span></div>
+              <div className="risk-heading"><span className="risk-icon">{risk === 'sem_obstaculo' ? <ShieldCheck size={23} /> : risk ? <AlertTriangle size={23} /> : <Eye size={22} />}</span><span className="risk-caption">CLASSIFICAÇÃO ATUAL</span></div>
               <strong className="risk-title">{risk ? LABELS[risk] : modelState === 'ready' ? 'Aguardando imagem' : 'Modelo não treinado'}</strong>
               <p>{risk ? RISK_COPY[risk] : modelState === 'ready' ? 'Inicie a câmera para analisar o percurso.' : 'Rode bash ml/executar_tudo.sh para treinar e exportar o modelo.'}</p>
               {risk && <div className="confidence"><div><span>Confiança do modelo</span><strong>{Math.round(confidence * 100)}%</strong></div><div className="confidence-track"><span style={{ width: `${Math.round(confidence * 100)}%` }} /></div></div>}
             </div>
-            <div className="alerts-box"><div className="box-heading"><span>ALERTAS DO DISPOSITIVO</span><span className="ready-label"><Check size={13} /> PRONTOS</span></div><button className="setting-row" aria-pressed={soundOn} onClick={() => setSoundOn(!soundOn)}><span className="setting-name">{soundOn ? <Volume2 size={17} /> : <VolumeX size={17} />} Som</span><span className={`toggle ${soundOn ? 'enabled' : ''}`}><i /></span></button><button className="setting-row" aria-pressed={vibrationOn} onClick={() => setVibrationOn(!vibrationOn)}><span className="setting-name"><Vibrate size={17} /> Vibração</span><span className={`toggle ${vibrationOn ? 'enabled' : ''}`}><i /></span></button><button className="setting-row" disabled={!bluetoothSupported() || arduino === 'connecting'} aria-pressed={arduino === 'on'} onClick={() => void connectArduino()}><span className="setting-name">{arduino === 'on' ? <BluetoothConnected size={17} /> : <Bluetooth size={17} />} Arduino {arduino === 'on' && distance !== null ? `· sensor ${distance} cm` : ''}</span><span className="arduino-action">{arduino === 'on' ? 'Desconectar' : arduino === 'connecting' ? 'Conectando…' : 'Conectar'}</span></button><p className="arduino-note">{arduinoMessage}</p></div>
+            <div className="alerts-box"><div className="box-heading"><span>ALERTAS DO DISPOSITIVO</span><span className="ready-label"><Check size={13} /> PRONTOS</span></div><button className="setting-row" aria-pressed={soundOn} onClick={() => setSoundOn(!soundOn)}><span className="setting-name">{soundOn ? <Volume2 size={17} /> : <VolumeX size={17} />} Som</span><span className={`toggle ${soundOn ? 'enabled' : ''}`}><i /></span></button><button className="setting-row" aria-pressed={vibrationOn} onClick={() => setVibrationOn(!vibrationOn)}><span className="setting-name"><Vibrate size={17} /> Vibração</span><span className={`toggle ${vibrationOn ? 'enabled' : ''}`}><i /></span></button></div>
             <p className="alert-status" aria-live="polite">{alertMessage}</p>
           </> : <>
             <div className="collect-panel"><div className="collect-title"><span className="collect-icon"><ImagePlus size={20} /></span><div><h2>Nova imagem</h2><p>Fotos da maquete reforçam a base de treino.</p></div></div>
@@ -280,7 +260,7 @@ export default function App() {
 
       {modelState === 'missing' && <section className="model-notice"><div className="notice-mark"><LoaderCircle size={18} /></div><p><strong>O modelo ainda não está no app.</strong> Rode <code>bash ml/executar_tudo.sh</code> (ou as etapas 1 a 6) para coletar dados, treinar e exportar o modelo para <code>public/model</code>.</p><span>ML / ARTIFACTS → PUBLIC / MODEL</span></section>}
 
-      <section className="workflow-strip"><div className="workflow-heading"><p className="eyebrow">DO DADO AO ALERTA</p><h2>O processo do projeto</h2></div><div className="workflow-steps"><div><span>01</span><strong>Coletar</strong><small>Fotos reais de obstáculos e caminhos</small></div><div><span>02</span><strong>Rotular</strong><small>Detector pronto marca os obstáculos</small></div><div><span>03</span><strong>Treinar</strong><small>CNN própria, criada do zero</small></div><div><span>04</span><strong>Avaliar</strong><small>{modelInfo?.acuracia_teste ? `${Math.round(modelInfo.acuracia_teste * 100)}% de acerto${modelInfo.acuracia_fotos_reais ? ` · ${Math.round(modelInfo.acuracia_fotos_reais * 100)}% em fotos reais` : ''} · ${Math.round((modelInfo.revocacao_perigo ?? 0) * 100)}% dos perigos detectados` : 'Teste e matriz de confusão'}</small></div></div></section>
+      <section className="workflow-strip"><div className="workflow-heading"><p className="eyebrow">DO DADO AO ALERTA</p><h2>O processo do projeto</h2></div><div className="workflow-steps"><div><span>01</span><strong>Coletar</strong><small>Fotos da maquete (base oficial)</small></div><div><span>02</span><strong>Rotular</strong><small>Detector pronto marca os obstáculos</small></div><div><span>03</span><strong>Treinar</strong><small>CNN própria, criada do zero</small></div><div><span>04</span><strong>Avaliar</strong><small>{modelInfo?.acuracia_teste ? `${Math.round(modelInfo.acuracia_teste * 100)}% de acerto na maquete · ${Math.round((modelInfo.revocacao_obstaculo ?? 0) * 100)}% dos obstáculos detectados` : 'Teste e matriz de confusão'}</small></div></div></section>
 
       <footer className="disclaimer" id="limites"><span className="disclaimer-mark"><AlertTriangle size={16} /></span><p><strong>Protótipo para demonstração acadêmica.</strong> Não é um dispositivo de navegação seguro nem substitui bengala, cão-guia ou orientação profissional. A câmera pode falhar, e a classificação não mede distância real. Teste somente em ambiente controlado, com acompanhamento.</p><span className="course-code">2026.2 · NSIN-0104</span></footer>
     </main>

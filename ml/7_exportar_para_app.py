@@ -1,15 +1,4 @@
-"""ETAPA 7 - EXPORTAR O MODELO PARA O APP DO CELULAR
-
-Converte o modelo treinado para o formato TensorFlow.js, que roda dentro do
-navegador do celular, e copia as métricas da avaliação para o app exibir.
-
-Saída:
-    public/model/model.json + group1-shard*.bin
-    public/model/info.json
-
-Uso:
-    python ml/7_exportar_para_app.py
-"""
+"""ETAPA 7 - EXPORTAR O MODELO PARA O APP DO CELULAR"""
 
 from __future__ import annotations
 
@@ -40,14 +29,12 @@ def main() -> None:
     if evaluation.exists():
         data = json.loads(evaluation.read_text(encoding="utf-8"))
         info.update(
-            acuracia_teste=data["acuracia_teste"],
-            revocacao_perigo=data["revocacao_perigo"],
-            amostras_teste=data["amostras_teste"],
-            limiar_perigo=data.get("limiar_perigo"),
+            acuracia_teste=data.get("acuracia_teste"),
+            acuracia_balanceada=data.get("acuracia_balanceada_teste"),
+            revocacao_obstaculo=data.get("revocacao_obstaculo"),
+            amostras_teste=data.get("amostras_teste"),
+            limiar_obstaculo=data.get("limiar_obstaculo"),
         )
-        real = data.get("por_origem", {}).get("fotos_reais") or {}
-        if real:
-            info.update(acuracia_fotos_reais=real["acuracia"], amostras_fotos_reais=real["amostras"])
     (EXPORT_DIR / "info.json").write_text(json.dumps(info, indent=2, ensure_ascii=False), encoding="utf-8")
     size = sum(f.stat().st_size for f in EXPORT_DIR.iterdir()) / 1024
     print(f"Modelo exportado para {EXPORT_DIR}/ ({size:.0f} KB). Rode o app com: npm run dev")

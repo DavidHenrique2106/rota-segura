@@ -1,49 +1,75 @@
-"""ETAPA 6 - AVALIAÇÃO DO MODELO
-
-Avalia o modelo treinado SOMENTE no conjunto de TESTE (fotos de chão, cones e
-caixas que a rede nunca viu no treino).
-
-Gera:
-    * acurácia, precisão, revocação (recall) e F1 por classe;
-    * matriz de confusão;
-    * comparação com um modelo de base simples (regressão logística sobre os
-      pixels), para mostrar quanto a CNN acrescenta;
-    * folha com exemplos de erros, para análise qualitativa.
-
-A métrica mais importante para a segurança é a REVOCAÇÃO DE "perigo": de todas
-as situações realmente perigosas, quantas o modelo detectou.
-
-Saída (ml/artefatos/):
-    avaliacao.json, relatorio_avaliacao.txt, matriz_confusao.png, exemplos_erros.jpg
-
-Uso:
-    python ml/6_avaliacao.py
-"""
+"""ETAPA 6 - AVALIAÇÃO DO MODELO (com_obstaculo × sem_obstaculo)"""
 
 from __future__ import annotations
 
 import json
 import warnings
-
 from pathlib import Path
 
 import numpy as np
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, f1_score, recall_score
+from sklearn.metrics import (accuracy_score, balanced_accuracy_score, classification_report, confusion_matrix,
+                             recall_score)
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
-from comum import ARTIFACTS_DIR, CLASSES, MODEL_PATH, load_split, tf
+from comum import ARTIFACTS_DIR, CLASSES, MODEL_PATH, POSITIVE, load_split, tf
 
-NAMES_PT = {"seguro": "seguro", "atencao": "atenção", "perigo": "perigo"}
+NAMES_PT = {"sem_obstaculo": "sem obstáculo", "com_obstaculo": "com obstáculo"}
+NEGATIVE = 1 - POSITIVE
+MIN_RECALL = 0.85
 
 
-def to_arrays(dataset: tf.data.Dataset) -> tuple[np.ndarray, np.ndarray]:
+def to_arrays(dataset) -> tuple[np.ndarray, np.ndarray, list[str]]:
     images, labels = [], []
     for x, y in dataset:
         images.append(x.numpy())
         labels.append(np.argmax(y.numpy(), axis=1))
-    return np.concatenate(images), np.concatenate(labels)
+    names = [Path(p).name for p in dataset.file_paths]
+    return np.concatenate(images), np.concatenate(labels), names
+
+
+def origin_masks(names: list[str]) -> dict[str, np.ndarray]:
+    starts = lambda prefix: np.array([n.startswith(prefix) for n in names])
+    return {"oficial": starts("oficial_"), "videos_maquete": starts("maquete_"),
+            "fotos_publicas": starts("real_"), "montagens": starts("montagem_")}
+
+
+def decide(prob_obstacle: np.ndarray, threshold: float) -> np.ndarray:
+    return np.where(prob_obstacle >= threshold, POSITIVE, NEGATIVE)
+
+
+def choose_threshold(model) -> tuple[float, list[dict], str]:
+    """Escolhe o limiar de P(com_obstaculo) na VALIDAÇÃO, de preferência só com fotos oficiais:
+    entre os limiares que detectam >= 85% dos obstáculos, o de maior acurácia balanceada."""
+    val_x, val_y, names = to_arrays(load_split("validacao", 64))
+    official = origin_masks(names)["oficial"]
+    use_official = official.any() and len(set(val_y[official])) == 2
+    mask = official if use_official else np.ones_like(val_y, dtype=bool)
+    probs = model.predict(val_x[mask], verbose=0)[:, POSITIVE]
+    table = []
+    for threshold in np.round(np.arange(0.10, 0.91, 0.05), 2):
+        pred = decide(probs, threshold)
+        table.append({"limiar": float(threshold),
+                      "revocacao_obstaculo": round(float(recall_score(val_y[mask], pred, pos_label=POSITIVE)), 4),
+                      "acuracia_balanceada": round(float(balanced_accuracy_score(val_y[mask], pred)), 4)})
+    allowed = [r for r in table if r["revocacao_obstaculo"] >= MIN_RECALL] or table
+    best = max(allowed, key=lambda r: (r["acuracia_balanceada"], -abs(r["limiar"] - 0.5)))
+    return best["limiar"], table, "fotos oficiais da validação" if use_official else "validação completa"
+
+
+def summarize(y: np.ndarray, pred: np.ndarray) -> dict:
+    if len(y) == 0:
+        return {}
+    has_pos, has_neg = (y == POSITIVE).any(), (y == NEGATIVE).any()
+    return {
+        "amostras": int(len(y)),
+        "acuracia": round(float(accuracy_score(y, pred)), 4),
+        "acuracia_balanceada": round(float(balanced_accuracy_score(y, pred)), 4) if has_pos and has_neg else None,
+        "revocacao_obstaculo": round(float((pred[y == POSITIVE] == POSITIVE).mean()), 4) if has_pos else None,
+        "alarmes_falsos": round(float((pred[y == NEGATIVE] == POSITIVE).mean()), 4) if has_neg else None,
+        "matriz_confusao": confusion_matrix(y, pred, labels=range(len(CLASSES))).tolist(),
+    }
 
 
 def baseline_accuracy(train_x, train_y, test_x, test_y) -> float:
@@ -55,215 +81,140 @@ def baseline_accuracy(train_x, train_y, test_x, test_y) -> float:
 
     model = make_pipeline(StandardScaler(), LogisticRegression(max_iter=2000, C=0.05))
     model.fit(features(train_x), train_y)
-    return float(accuracy_score(test_y, model.predict(features(test_x))))
+    return float(balanced_accuracy_score(test_y, model.predict(features(test_x))))
 
 
-PERIGO = CLASSES.index("perigo")
-
-
-def apply_threshold(probabilities: np.ndarray, threshold: float | None) -> np.ndarray:
-    """Avisa 'perigo' quando P(perigo) >= limiar; senão escolhe a mais provável entre as outras."""
-    if threshold is None:
-        return probabilities.argmax(axis=1)
-    others = probabilities.copy()
-    others[:, PERIGO] = -1
-    return np.where(probabilities[:, PERIGO] >= threshold, PERIGO, others.argmax(axis=1))
-
-
-def choose_threshold(model) -> tuple[float, list]:
-    """Escolhe o limiar de 'perigo' no conjunto de VALIDAÇÃO (nunca no teste).
-
-    Critério: entre os limiares que detectam pelo menos 75% dos perigos (revocação >= 0,75), o de maior F1
-    médio das três classes. Assim priorizamos não deixar passar perigos sem transformar tudo em alarme falso."""
-    val_x, val_y = to_arrays(load_split("validacao", 64))
-    probs = model.predict(val_x, verbose=0)
-    table = []
-    for threshold in np.round(np.arange(0.15, 0.61, 0.05), 2):
-        pred = apply_threshold(probs, threshold)
-        recall = recall_score(val_y, pred, labels=[PERIGO], average="macro", zero_division=0)
-        macro_f1 = f1_score(val_y, pred, average="macro")
-        table.append((float(threshold), round(float(recall), 4), round(float(macro_f1), 4),
-                      round(float(accuracy_score(val_y, pred)), 4)))
-    allowed = [row for row in table if row[1] >= 0.75] or table
-    best = max(allowed, key=lambda row: row[2])
-    return best[0], table
-
-
-def save_confusion_matrix(matrix: np.ndarray, path) -> None:
+def save_confusion_matrix(matrix: np.ndarray, path: Path, title: str) -> None:
     import matplotlib
 
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
     labels = [NAMES_PT[c] for c in CLASSES]
-    figure, axis = plt.subplots(figsize=(5.6, 4.8))
+    figure, axis = plt.subplots(figsize=(5, 4.3))
     image = axis.imshow(matrix, cmap="Greens")
     figure.colorbar(image, ax=axis, fraction=0.046, pad=0.04)
-    axis.set(
-        xticks=range(3), yticks=range(3), xticklabels=labels, yticklabels=labels,
-        xlabel="Classe prevista pelo modelo", ylabel="Classe real",
-        title="Matriz de confusão — conjunto de teste",
-    )
-    for row in range(3):
-        for col in range(3):
+    n = len(CLASSES)
+    axis.set(xticks=range(n), yticks=range(n), xticklabels=labels, yticklabels=labels,
+             xlabel="Classe prevista pelo modelo", ylabel="Classe real", title=title)
+    for row in range(n):
+        for col in range(n):
             value = matrix[row, col]
             axis.text(col, row, str(value), ha="center", va="center",
-                      color="white" if value > matrix.max() / 2 else "black", fontsize=12)
+                      color="white" if value > matrix.max() / 2 else "black", fontsize=13)
     figure.tight_layout()
     figure.savefig(path, dpi=150)
     plt.close(figure)
 
 
-def save_error_examples(images, true, predicted, confidence, path, limit=24) -> None:
+def save_error_examples(images, true, predicted, prob, path, priority_mask, limit=24) -> None:
+    """Erros por tipo, começando pelo mais grave (obstáculo previsto como 'sem obstáculo'), e
+    preferindo fotos da base oficial."""
     from PIL import Image, ImageDraw
 
-    # Mostra cada TIPO de erro (real -> previsto), começando pelo mais grave: perigo previsto como seguro.
-    order = [(2, 0), (2, 1), (1, 0), (0, 2), (1, 2), (0, 1)]
     rng = np.random.default_rng(0)
-    per_type = limit // 6
-    wrong = []
-    for real_class, predicted_class in order:
-        idx = np.flatnonzero((true == real_class) & (predicted == predicted_class))
-        wrong += list(rng.choice(idx, size=min(per_type, len(idx)), replace=False)) if len(idx) else []
-    if not wrong:
+    chosen = []
+    for real_class in (POSITIVE, NEGATIVE):
+        wrong = np.flatnonzero((true == real_class) & (predicted != real_class))
+        ordered = list(rng.permutation(wrong[priority_mask[wrong]])) + list(rng.permutation(wrong[~priority_mask[wrong]]))
+        chosen += ordered[: limit // 2]
+    if not chosen:
         return
-    cell = 160
-    columns = 6
-    rows = (len(wrong) + columns - 1) // columns
+    cell, columns = 160, 6
+    rows = (len(chosen) + columns - 1) // columns
     sheet = Image.new("RGB", (columns * cell, rows * (cell + 30)), "white")
     draw = ImageDraw.Draw(sheet)
-    for n, index in enumerate(wrong):
+    for n, index in enumerate(chosen):
         x, y = (n % columns) * cell, (n // columns) * (cell + 30)
         sheet.paste(Image.fromarray((images[index] * 255).astype(np.uint8)), (x, y))
-        draw.text((x + 4, y + cell + 2), f"real: {CLASSES[true[index]]}", fill="black")
-        draw.text((x + 4, y + cell + 15), f"previu: {CLASSES[predicted[index]]} ({confidence[index]:.0%})", fill="red")
+        draw.text((x + 4, y + cell + 2), f"real: {NAMES_PT[CLASSES[true[index]]]}", fill="black")
+        draw.text((x + 4, y + cell + 15), f"previu: {NAMES_PT[CLASSES[predicted[index]]]} (P obst. {prob[index]:.0%})",
+                  fill="red")
     sheet.save(path, quality=90)
 
 
-def compare_with_first_version(test_x, test_y, names, current_pred) -> None:
-    """Avalia a 1ª versão do modelo (treinada só com montagens, guardada em data/modelo_antigo) no MESMO teste
-    e grava ml/artefatos/comparacao_modelos.json. Ambas usam a classe mais provável (sem limiar)."""
-    old_dir = Path("data/modelo_antigo")
-    if not (old_dir / "model.json").exists():
-        return
-    import tensorflowjs as tfjs
-
-    old_pred = tfjs.converters.load_keras_model(str(old_dir / "model.json")).predict(test_x, verbose=0).argmax(axis=1)
-    real = np.array([n.startswith("real_") for n in names])
-    comp = np.array([not n.startswith(("real_", "maquete_")) for n in names])
-
-    def summarize(name: str, pred: np.ndarray) -> dict:
-        def recall(mask):
-            sel = mask & (test_y == PERIGO)
-            return round(float((pred[sel] == PERIGO).mean()), 4) if sel.any() else None
-        return {"nome": name, "acuracia": round(float(accuracy_score(test_y, pred)), 4),
-                "acuracia_fotos_reais": round(float(accuracy_score(test_y[real], pred[real])), 4),
-                "revocacao_perigo_fotos_reais": recall(real),
-                "acuracia_montagens": round(float(accuracy_score(test_y[comp], pred[comp])), 4)}
-
-    result = {"descricao": f"As duas versões avaliadas no MESMO conjunto de teste ({len(test_y)} imagens), "
-                           "usando a classe mais provável (sem limiar).",
-              "modelos": [summarize("Versão 1: treinada só com montagens", old_pred),
-                          summarize("Versão atual: fotos reais + vídeos da maquete + montagens", current_pred)]}
-    (ARTIFACTS_DIR / "comparacao_modelos.json").write_text(json.dumps(result, indent=2, ensure_ascii=False),
-                                                         encoding="utf-8")
-
-
 def main() -> None:
-    # Avisos numéricos espúrios do numpy/Accelerate no macOS durante a regressão logística.
     warnings.filterwarnings("ignore", category=RuntimeWarning)
     if not MODEL_PATH.exists():
         raise SystemExit(f"Modelo {MODEL_PATH} não encontrado. Rode antes: python ml/5_treinamento.py")
     model = tf.keras.models.load_model(MODEL_PATH)
 
-    test_data = load_split("teste", 64)
-    test_x, test_y = to_arrays(test_data)
-    names = [Path(p).name for p in test_data.file_paths]
-    is_real = np.array([n.startswith("real_") for n in names])
-    is_maquete = np.array([n.startswith("maquete_") for n in names])
-    probabilities = model.predict(test_x, verbose=0)
-    argmax_pred = probabilities.argmax(axis=1)
-    threshold, threshold_table = choose_threshold(model)
-    predicted = apply_threshold(probabilities, threshold)
-    confidence = probabilities.max(axis=1)
-    argmax_report = classification_report(test_y, argmax_pred, target_names=list(CLASSES), output_dict=True,
-                                          zero_division=0)
+    test_x, test_y, names = to_arrays(load_split("teste", 64))
+    masks = origin_masks(names)
+    prob = model.predict(test_x, verbose=0)[:, POSITIVE]
+    threshold, table, chosen_on = choose_threshold(model)
+    predicted = decide(prob, threshold)
+    argmax_pred = decide(prob, 0.5)
 
-    accuracy = float(accuracy_score(test_y, predicted))
-    report = classification_report(test_y, predicted, target_names=list(CLASSES), output_dict=True, zero_division=0)
-    report_text = classification_report(test_y, predicted, target_names=list(CLASSES), digits=3, zero_division=0)
-    matrix = confusion_matrix(test_y, predicted, labels=range(3))
+    official = masks["oficial"] if masks["oficial"].any() else np.ones_like(test_y, dtype=bool)
+    report = classification_report(test_y[official], predicted[official], labels=range(len(CLASSES)),
+                                   target_names=list(CLASSES), output_dict=True, zero_division=0)
+    report_text = classification_report(test_y[official], predicted[official], labels=range(len(CLASSES)),
+                                        target_names=list(CLASSES), digits=3, zero_division=0)
+    matrix = confusion_matrix(test_y[official], predicted[official], labels=range(len(CLASSES)))
 
-    print("Treinando modelo de base (regressão logística) para comparação...")
-    train_x, train_y = to_arrays(load_split("treino", 64))
-    baseline = baseline_accuracy(train_x, train_y, test_x, test_y)
-
-    # Erro mais grave: dizer "seguro" quando era "perigo".
-    danger_as_safe = int(matrix[CLASSES.index("perigo"), CLASSES.index("seguro")])
-
-    def subset(mask: np.ndarray) -> dict:
-        if not mask.any():
-            return {}
-        sub_report = classification_report(test_y[mask], predicted[mask], labels=range(3), target_names=list(CLASSES),
-                                           output_dict=True, zero_division=0)
-        has_danger = bool((test_y[mask] == PERIGO).any())
-        return {
-            "amostras": int(mask.sum()),
-            "acuracia": round(float(accuracy_score(test_y[mask], predicted[mask])), 4),
-            # Sem nenhum caso de perigo no subconjunto, a revocação não está definida.
-            "revocacao_perigo": round(sub_report["perigo"]["recall"], 4) if has_danger else None,
-            "matriz_confusao": confusion_matrix(test_y[mask], predicted[mask], labels=range(3)).tolist(),
-        }
-
-    by_origin = {"fotos_reais": subset(is_real), "maquete": subset(is_maquete),
-                 "montagens": subset(~is_real & ~is_maquete)}
-
-    results = {
-        "amostras_teste": int(len(test_y)),
-        "acuracia_teste": round(accuracy, 4),
-        "acuracia_modelo_base_regressao_logistica": round(baseline, 4),
-        "revocacao_perigo": round(report["perigo"]["recall"], 4),
-        "perigo_classificado_como_seguro": danger_as_safe,
-        "relatorio_por_classe": report,
-        "matriz_confusao": {"linhas_real_colunas_previsto": list(CLASSES), "valores": matrix.tolist()},
-        "parametros_modelo": int(model.count_params()),
-        "limiar_perigo": threshold,
-        "limiar_escolha_validacao": [{"limiar": a, "revocacao_perigo": b, "f1_medio": c, "acuracia": d}
-                                     for a, b, c, d in threshold_table],
-        "sem_limiar_argmax": {
-            "acuracia": round(float(accuracy_score(test_y, argmax_pred)), 4),
-            "revocacao_perigo": round(argmax_report["perigo"]["recall"], 4),
-            "perigo_classificado_como_seguro": int(confusion_matrix(test_y, argmax_pred, labels=range(3))[PERIGO, 0]),
-        },
-        "por_origem": by_origin,
+    print("Treinando modelo de comparação (regressão logística)...")
+    train_x, train_y, train_names = to_arrays(load_split("treino", 64))
+    train_prob = model.predict(train_x, verbose=0)[:, POSITIVE]
+    train_pred = decide(train_prob, threshold)
+    train_official = origin_masks(train_names)["oficial"]
+    val_x, val_y, val_names = to_arrays(load_split("validacao", 64))
+    val_pred = decide(model.predict(val_x, verbose=0)[:, POSITIVE], threshold)
+    val_official = origin_masks(val_names)["oficial"]
+    splits = {
+        "treino": {"oficial": summarize(train_y[train_official], train_pred[train_official]),
+                   "tudo": summarize(train_y, train_pred)},
+        "validacao": {"oficial": summarize(val_y[val_official], val_pred[val_official]),
+                      "tudo": summarize(val_y, val_pred)},
+        "teste": {"oficial": summarize(test_y[official], predicted[official]), "tudo": summarize(test_y, predicted)},
     }
-    compare_with_first_version(test_x, test_y, names, argmax_pred)
+    baseline = baseline_accuracy(train_x, train_y, test_x[official], test_y[official])
+
+    oficial = summarize(test_y[official], predicted[official])
+    results = {
+        "classes": list(CLASSES),
+        "base_oficial_teste": oficial,
+        "acuracia_teste": oficial.get("acuracia"),
+        "acuracia_balanceada_teste": oficial.get("acuracia_balanceada"),
+        "revocacao_obstaculo": oficial.get("revocacao_obstaculo"),
+        "alarmes_falsos": oficial.get("alarmes_falsos"),
+        "amostras_teste": oficial.get("amostras"),
+        "acuracia_balanceada_modelo_simples": round(baseline, 4),
+        "relatorio_por_classe": report,
+        "limiar_obstaculo": threshold,
+        "limiar_escolhido_em": chosen_on,
+        "limiar_tabela_validacao": table,
+        "sem_limiar_0_5": summarize(test_y[official], argmax_pred[official]),
+        "por_origem": {name: summarize(test_y[m], predicted[m]) for name, m in masks.items() if m.any()},
+        "parametros_modelo": int(model.count_params()),
+        "treino_validacao_teste": splits,
+    }
     ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
     (ARTIFACTS_DIR / "avaliacao.json").write_text(json.dumps(results, indent=2, ensure_ascii=False), encoding="utf-8")
-    save_confusion_matrix(matrix, ARTIFACTS_DIR / "matriz_confusao.png")
-    save_error_examples(test_x, test_y, predicted, confidence, ARTIFACTS_DIR / "exemplos_erros.jpg")
+    save_confusion_matrix(matrix, ARTIFACTS_DIR / "matriz_confusao.png", "Matriz de confusão — base oficial (teste)")
+    save_error_examples(test_x, test_y, predicted, prob, ARTIFACTS_DIR / "exemplos_erros.jpg", masks["oficial"])
 
+    fmt = lambda v: "—" if v is None else f"{v:.3f}"
     summary = (
-        f"AVALIAÇÃO NO CONJUNTO DE TESTE ({len(test_y)} imagens nunca vistas no treino)\n"
-        f"Regra de decisão: 'perigo' quando P(perigo) >= {threshold:.2f} (escolhido na validação: maior F1 médio com revocação de perigo >= 0,75).\n"
-        f"Sem limiar (classe mais provável): acurácia {results['sem_limiar_argmax']['acuracia']:.3f}, "
-        f"revocação de perigo {results['sem_limiar_argmax']['revocacao_perigo']:.3f}\n\n"
+        f"AVALIAÇÃO NO TESTE — BASE OFICIAL ({oficial.get('amostras', 0)} fotos de rajadas nunca vistas no treino)\n"
+        f"Regra: 'com obstáculo' quando P(obstáculo) >= {threshold:.2f} (limiar escolhido nas {chosen_on}).\n\n"
         f"{report_text}\n"
         f"Matriz de confusão (linhas = real, colunas = previsto; ordem {', '.join(CLASSES)}):\n{matrix}\n\n"
-        f"Acurácia da CNN:                          {accuracy:.3f}\n"
-        f"Acurácia do modelo de base (reg. logística): {baseline:.3f}\n"
-        f"Revocação de 'perigo':                    {report['perigo']['recall']:.3f}\n"
-        f"Casos de 'perigo' previstos como 'seguro': {danger_as_safe}\n"
+        f"Acurácia:                         {fmt(oficial.get('acuracia'))}\n"
+        f"Acurácia balanceada:              {fmt(oficial.get('acuracia_balanceada'))}\n"
+        f"Obstáculos detectados (revocação): {fmt(oficial.get('revocacao_obstaculo'))}\n"
+        f"Alarmes falsos (sem obst. -> com): {fmt(oficial.get('alarmes_falsos'))}\n"
+        f"Modelo simples (acur. balanceada): {baseline:.3f}\n"
     )
-    for origin, data in by_origin.items():
-        if data:
-            danger = "sem casos de perigo" if data["revocacao_perigo"] is None else f"{data['revocacao_perigo']:.3f}"
-            summary += (f"\nSó {origin.replace('_', ' ')} ({data['amostras']} imagens): acurácia {data['acuracia']:.3f}, "
-                        f"revocação de perigo {danger}\n"
-                        f"  matriz: {data['matriz_confusao']}\n")
-    (ARTIFACTS_DIR / "relatorio_avaliacao.txt").write_text(summary, encoding="utf-8")
+    summary += "\nTreino × validação × teste (base oficial):\n"
+    for split_name, data in splits.items():
+        o = data["oficial"]
+        summary += f"  {split_name:<10} acurácia {fmt(o.get('acuracia'))} ({o.get('amostras', 0)} fotos)\n"
+    for name, data in results["por_origem"].items():
+        summary += (f"\n{name} ({data['amostras']} imagens): acurácia {fmt(data['acuracia'])}, "
+                    f"obstáculos detectados {fmt(data['revocacao_obstaculo'])}, alarmes falsos {fmt(data['alarmes_falsos'])}")
+    (ARTIFACTS_DIR / "relatorio_avaliacao.txt").write_text(summary + "\n", encoding="utf-8")
     print(summary)
-    print(f"Arquivos em {ARTIFACTS_DIR}/: avaliacao.json, relatorio_avaliacao.txt, matriz_confusao.png, exemplos_erros.jpg")
 
 
 if __name__ == "__main__":
