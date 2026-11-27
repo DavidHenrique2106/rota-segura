@@ -1,12 +1,4 @@
-"""EXTRA - TESTE DO ROTULADOR (OWLv2) NAS FOTOS DA MAQUETE
-
-Roda o detector usado na etapa 2 nas fotos de data/maquete/visao_geral para
-verificar se ele reconhece os objetos em miniatura (cones, barreira, lata...).
-Gera ml/artefatos/maquete_deteccao.jpg (usada no relatório).
-
-Uso:
-    python ml/extra_detector_na_maquete.py
-"""
+"""EXTRA - TESTE DO ROTULADOR (OWLv2) NAS FOTOS DA MAQUETE"""
 
 from __future__ import annotations
 
@@ -26,7 +18,7 @@ def main() -> None:
     files, seen = [], set()
     for path in sorted(Path("data/maquete/visao_geral").glob("*")):
         digest = hashlib.md5(path.read_bytes()).hexdigest()
-        if digest not in seen:  # ignora fotos repetidas
+        if digest not in seen:
             seen.add(digest)
             files.append(path)
     device = "mps" if torch.backends.mps.is_available() else "cpu"

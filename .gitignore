@@ -5,26 +5,25 @@ dist/
 __pycache__/
 .DS_Store
 .vercel/
+.github/
 
-# Fotos baixadas de bases públicas (Places365, Open Images, Hugging Face):
-# não são redistribuídas aqui; ml/1_coleta_dados.py baixa tudo de novo.
+*.pdf
+slides/
+ml/8_relatorio_pdf.py
+ml/9_slides.py
+ml/atualizar_com_fotos_novas.sh
+ml/artefatos/experimentos/
+
 data/fontes/
-# Base gerada pela etapa 4 (recriada a partir das fontes).
 data/base/
-# Arquivos temporários da rotulagem.
-data/*.parcial.csv
-data/rotulagem.log
-data/rotular_loop.sh
-data/treinar_loop.sh
-data/treino.log
-# Vídeos originais da maquete (grandes); os quadros extraídos ficam em data/maquete/sem_rotulo/.
+data/bases/
+data/modelo_antigo/
 data/maquete/videos/
-data/rotular_maquete.sh
-data/rotulagem_maquete.log
-# Espelho da pasta do Drive (os arquivos novos são copiados para videos/ e sem_rotulo/).
 data/maquete/drive/
 data/maquete/drive_oficial/
-data/rotular_oficial.sh
-data/rotulagem_oficial.log
-data/bases/
-ml/artefatos/experimentos/
+data/maquete/drive_processados.txt
+data/maquete/LEIA-ME.txt
+data/*.parcial.csv
+data/*.log
+data/*.sh
+data/.atualizando

@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Executa o projeto inteiro, na ordem pedida pelo professor:
-# coleta -> rotulagem -> divisão treino/teste -> base rotulada -> treino -> avaliação -> exportação -> relatório.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 PY=".venv/bin/python"
@@ -31,5 +29,4 @@ echo "== 3. Divisão treino/validação/teste =="  && $PY ml/3_divisao_treino_te
 echo "== 4/5/5b. Base, treino e escolha das fontes públicas ==" && $PY ml/5b_escolha_das_fontes.py
 echo "== 6. Avaliação =="                       && $PY ml/6_avaliacao.py
 echo "== 7. Exportação para o app =="           && $PY ml/7_exportar_para_app.py
-echo "== 8. Relatório em PDF =="              && $PY ml/8_relatorio_pdf.py
 echo "Pronto! Rode o app com: npm run dev"

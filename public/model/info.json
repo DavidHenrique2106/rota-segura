@@ -1,14 +1,12 @@
 {
   "classes": [
-    "seguro",
-    "atencao",
-    "perigo"
+    "sem_obstaculo",
+    "com_obstaculo"
   ],
   "tamanho_imagem": 160,
-  "acuracia_teste": 0.7211,
-  "revocacao_perigo": 0.8107,
-  "amostras_teste": 900,
-  "limiar_perigo": 0.35,
-  "acuracia_fotos_reais": 0.5577,
-  "amostras_fotos_reais": 355
+  "acuracia_teste": 1.0,
+  "acuracia_balanceada": 1.0,
+  "revocacao_obstaculo": 1.0,
+  "amostras_teste": 80,
+  "limiar_obstaculo": 0.2
 }

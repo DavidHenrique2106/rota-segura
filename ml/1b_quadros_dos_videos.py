@@ -1,19 +1,4 @@
-"""ETAPA 1b - COLETA: QUADROS DOS VÍDEOS DA MAQUETE
-
-Extrai quadros dos vídeos gravados na maquete (data/maquete/videos/*.mp4) e
-salva em data/maquete/sem_rotulo/, de onde a etapa 2 rotula automaticamente.
-
-* 3 quadros por segundo (quadros seguidos de um vídeo são quase iguais).
-* Vídeos repetidos (mesmo conteúdo) são processados só uma vez.
-* Quadros borrados (pouca nitidez, medida pela variância do Laplaciano) são
-  descartados.
-* O nome de cada quadro guarda o vídeo e o TRECHO de 5 segundos de onde ele
-  veio (ex.: video2_t007_q0041.jpg). A etapa 3 divide treino/validação/teste
-  por trecho, para que quadros quase iguais não fiquem em partes diferentes.
-
-Uso:
-    python ml/1b_quadros_dos_videos.py
-"""
+"""ETAPA 1b - COLETA: QUADROS DOS VÍDEOS DA MAQUETE"""
 
 from __future__ import annotations
 
@@ -26,7 +11,7 @@ import numpy as np
 
 FRAMES_PER_SECOND = 3
 SEGMENT_SECONDS = 5
-MIN_SHARPNESS = 40.0  # variância do Laplaciano abaixo disso = quadro borrado
+MIN_SHARPNESS = 40.0
 
 
 def main() -> None:
@@ -41,7 +26,7 @@ def main() -> None:
         return
     args.saida.mkdir(parents=True, exist_ok=True)
     for old in args.saida.glob("video*_t*_q*.jpg"):
-        old.unlink()  # refaz do zero para refletir os vídeos atuais
+        old.unlink()
 
     seen: set[str] = set()
     number = 0

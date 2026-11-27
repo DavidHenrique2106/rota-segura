@@ -1,0 +1,18 @@
+{
+  "criterio": "maior acurácia balanceada nas fotos oficiais da VALIDAÇÃO",
+  "escolhida": "nenhuma",
+  "resultados": {
+    "nenhuma": {
+      "amostras_validacao_oficial": 55,
+      "acuracia_balanceada_0_5": 0.6679,
+      "acuracia_balanceada_melhor_limiar": 0.825,
+      "revocacao_obstaculo_0_5": 0.6857
+    },
+    "reais": {
+      "amostras_validacao_oficial": 55,
+      "acuracia_balanceada_0_5": 0.8,
+      "acuracia_balanceada_melhor_limiar": 0.8107,
+      "revocacao_obstaculo_0_5": 0.6
+    }
+  }
+}
