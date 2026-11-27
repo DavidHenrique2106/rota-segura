@@ -1,31 +1,4 @@
-"""ETAPA 1 - COLETA DE DADOS
-
-Baixa fotos reais de fontes públicas e extrai os recortes dos obstáculos:
-
-* Fundos (o caminho à frente): Places365 (MIT), conjunto de validação, só
-  categorias de cena por onde se caminha (corredor, saguão, viela, calçadão,
-  faixa de pedestres, garagem, trilha...).
-* Caixas: Open Images V7, classe "Box", usando as máscaras de segmentação
-  feitas por humanos para recortar só o objeto.
-* Cones: base "Junhan0518/Traffic_Cone" (Hugging Face, Apache-2.0). Usamos as
-  fotos de cone em fundo branco e recortamos o cone removendo o fundo.
-* Fotos reais (sem montagem), rotuladas depois na etapa 2:
-  - Places365: cenas onde há móveis, pessoas e objetos no caminho (rua, praça,
-    estação, escritório, sala, cozinha...) - categorias diferentes das dos fundos;
-  - Open Images: fotos com cones, caixas, cadeiras, bancos, bicicletas, lixeiras,
-    hidrantes, pessoas... (as caixas usadas nos recortes ficam de fora);
-  - Traffic_Cone: as fotos de cone em cenas reais (as de fundo branco ficam de fora).
-  Todas recortadas no quadrado central, igual ao que o app analisa.
-
-Saída:
-    data/fontes/fundos/*.jpg
-    data/fontes/recortes/caixa/*.png   (RGBA, fundo transparente)
-    data/fontes/recortes/cone/*.png    (RGBA, fundo transparente)
-    data/fontes/fotos_reais/*.jpg      (quadradas, 256x256)
-
-Uso:
-    python ml/1_coleta_dados.py
-"""
+"""ETAPA 1 - COLETA DE DADOS"""
 
 from __future__ import annotations
 
@@ -53,14 +26,12 @@ CONE_TAR = "https://huggingface.co/datasets/Junhan0518/Traffic_Cone/resolve/main
 BOX = "/m/025dyy"
 PLACES_TAR = "https://data.csail.mit.edu/places/places365/val_256.tar"
 PLACES_LIST = "https://data.csail.mit.edu/places/places365/filelist_places365-standard.tar"
-# Categorias da Places365 que representam um caminho para pedestres.
 PLACES_CATEGORIES = {
     "/a/alley", "/a/arcade", "/a/atrium/public", "/b/basement", "/b/boardwalk",
     "/c/corridor", "/c/courtyard", "/c/crosswalk", "/d/driveway", "/e/elevator_lobby",
     "/e/entrance_hall", "/f/forest_path", "/l/lobby",
     "/p/parking_garage/indoor", "/p/promenade",
 }
-# Categorias para as FOTOS REAIS (diferentes das dos fundos, para não repetir foto).
 REAL_PLACES_CATEGORIES = {
     "/s/street", "/p/plaza", "/p/patio", "/p/parking_lot", "/b/bus_station/indoor",
     "/s/subway_station/platform", "/t/train_station/platform", "/m/museum/indoor",
@@ -68,7 +39,6 @@ REAL_PLACES_CATEGORIES = {
     "/c/classroom", "/w/waiting_room", "/s/storage_room", "/s/shopping_mall/indoor",
     "/s/supermarket", "/c/campus", "/p/playground",
 }
-# Classes do Open Images que funcionam como obstáculos no caminho.
 OI_OBSTACLES = {
     "/m/025dyy": "caixa", "/m/02zn6n": "barril", "/m/0cvnqh": "banco", "/m/0199g": "bicicleta",
     "/m/01mzpv": "cadeira", "/m/02crq1": "sofa", "/m/01y9k5": "mesa", "/m/04bcr3": "mesa",
@@ -79,8 +49,6 @@ TRAFFIC_CONE = "/m/03sy7v"
 PER_OBSTACLE_CLASS = 90
 SPLITS = {"validation": "val", "test": "test"}
 
-# Revisão manual (olhando as folhas de contato dos recortes): removidos os cones
-# com marca d'água/pilhas caídas e as caixas com máscara incompleta.
 REVISAO_EXCLUIR = {
     "cone": {"135", "2", "24", "25", "26", "4", "501", "57", "60", "65"},
     "caixa": {
@@ -142,7 +110,6 @@ def center_square(image: Image.Image, size: int = 256) -> Image.Image:
     return image.crop((left, top, left + side, top + side)).resize((size, size), Image.LANCZOS)
 
 
-# --------------------------------------------------------------------- fundos
 def collect_backgrounds(cache: Path, out_dir: Path, places: set[str] = PLACES_CATEGORIES, prefix: str = "") -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     lists = fetch_cached(PLACES_LIST, cache / "filelist_places365-standard.tar")
@@ -172,7 +139,6 @@ def collect_backgrounds(cache: Path, out_dir: Path, places: set[str] = PLACES_CA
     print(f"Fotos Places365 salvas em {out_dir.name}: {ok} ({len(places)} categorias de cena)")
 
 
-# --------------------------------------------------------------------- caixas
 def collect_boxes(cache: Path, out_dir: Path) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     rows: list[tuple[str, dict[str, str]]] = []
@@ -185,7 +151,7 @@ def collect_boxes(cache: Path, out_dir: Path) -> None:
                 x0, x1, y0, y1 = (float(row[k]) for k in ("BoxXMin", "BoxXMax", "BoxYMin", "BoxYMax"))
                 touches_edge = x0 < 0.01 or y0 < 0.01 or x1 > 0.99 or y1 > 0.99
                 if touches_edge or (x1 - x0) * (y1 - y0) < 0.02:
-                    continue  # objeto cortado pela borda ou pequeno demais
+                    continue
                 rows.append((split, row))
     print(f"Caixas: {len(rows)} máscaras candidatas")
 
@@ -219,7 +185,7 @@ def collect_boxes(cache: Path, out_dir: Path) -> None:
         x0, x1 = float(row["BoxXMin"]) * width, float(row["BoxXMax"]) * width
         y0, y1 = float(row["BoxYMin"]) * height, float(row["BoxYMax"]) * height
         if largest.sum() < 0.45 * (x1 - x0) * (y1 - y0):
-            return False  # máscara muito incompleta
+            return False
         alpha = Image.fromarray((ndimage.gaussian_filter(largest.astype(float), 1.0) * 255).astype(np.uint8))
         rgba = image.copy()
         rgba.putalpha(alpha)
@@ -234,13 +200,12 @@ def collect_boxes(cache: Path, out_dir: Path) -> None:
     print(f"Recortes de caixa salvos: {ok}")
 
 
-# ---------------------------------------------------------------------- cones
 def white_background_cutout(image: Image.Image) -> Image.Image | None:
     """Remove fundo branco (foto de produto) e devolve o cone em RGBA."""
     rgb = np.asarray(image.convert("RGB")).astype(np.int16)
     border = np.concatenate([rgb[0], rgb[-1], rgb[:, 0], rgb[:, -1]])
     if (border.min(axis=1) > 225).mean() < 0.92:
-        return None  # não é foto com fundo branco
+        return None
     near_white = (rgb.min(axis=2) > 215) & (rgb.max(axis=2) - rgb.min(axis=2) < 25)
     regions, _ = ndimage.label(near_white)
     edge_ids = np.unique(np.concatenate([regions[0], regions[-1], regions[:, 0], regions[:, -1]]))
@@ -254,7 +219,6 @@ def white_background_cutout(image: Image.Image) -> Image.Image | None:
     keep = ndimage.binary_fill_holes(keep)
     if keep.mean() < 0.05:
         return None
-    # O objeto principal precisa ser laranja/vermelho (um cone de verdade).
     hsv = np.asarray(image.convert("HSV")).astype(np.int16)
     hue, sat = hsv[..., 0][keep], hsv[..., 1][keep]
     orange = (((hue < 25) | (hue > 240)) & (sat > 110)).mean()
@@ -280,18 +244,16 @@ def collect_cones(cache: Path, out_dir: Path) -> None:
                 continue
             aspect = cutout.height / cutout.width
             if not 0.6 <= aspect <= 2.2:
-                continue  # vários cones lado a lado ou recorte ruim
+                continue
             save_clean(shrink(cutout, 512), out_dir / f"{Path(member.name).stem}.png")
             ok += 1
     print(f"Recortes de cone salvos: {ok}")
 
 
-# --------------------------------------------------------------- fotos reais
 def collect_real_photos(cache: Path, out_dir: Path) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     collect_backgrounds(cache, out_dir, REAL_PLACES_CATEGORIES, prefix="places_")
 
-    # Open Images: imagens com obstáculos anotados (caixas usadas nos recortes ficam de fora).
     used_for_cutouts: set[str] = set()
     for split in SPLITS:
         seg_csv = fetch_cached(f"{OI}/v5/{split}-annotations-object-segmentation.csv", cache / f"{split}-seg.csv")
@@ -310,7 +272,7 @@ def collect_real_photos(cache: Path, out_dir: Path) -> None:
             if float(row["IsGroupOf"] or 0) or per_class[name] >= PER_OBSTACLE_CLASS:
                 continue
             if float(row["YMax"]) - float(row["YMin"]) < 0.25:
-                continue  # objeto pequeno: não acrescenta exemplos de obstáculo próximo
+                continue
             chosen[(split, row["ImageID"])] = name
             per_class[name] += 1
         labels_csv = fetch_cached(f"{OI}/v7/oidv7-{short}-annotations-human-imagelabels.csv", cache / f"{short}-labels.csv")
@@ -336,7 +298,6 @@ def collect_real_photos(cache: Path, out_dir: Path) -> None:
         ok = sum(pool.map(download, sorted(chosen.items())))
     print(f"Fotos Open Images salvas: {ok}")
 
-    # Fotos de cone em cenas reais (as de fundo branco viraram recortes).
     archive = fetch_cached(CONE_TAR, cache / "cone_dataset.tar.gz")
     ok = 0
     with tarfile.open(archive) as tar:
@@ -347,7 +308,7 @@ def collect_real_photos(cache: Path, out_dir: Path) -> None:
             rgb = np.asarray(image).astype(np.int16)
             border = np.concatenate([rgb[0], rgb[-1], rgb[:, 0], rgb[:, -1]])
             if (border.min(axis=1) > 225).mean() > 0.5 or min(image.size) < 200:
-                continue  # foto de produto em fundo branco ou pequena demais
+                continue
             save_clean(center_square(image), out_dir / f"hf_cone_{Path(member.name).stem}.jpg", quality=92)
             ok += 1
     print(f"Fotos reais de cone salvas: {ok}")
@@ -368,7 +329,7 @@ def main() -> None:
     args = parser.parse_args()
     out = args.saida
     cache = out / "_cache"
-    done = lambda folder, pattern: not args.refazer and any((out / folder).glob(pattern))  # noqa: E731
+    done = lambda folder, pattern: not args.refazer and any((out / folder).glob(pattern))
     if not done("recortes/cone", "*.png"):
         collect_cones(cache, out / "recortes" / "cone")
     if not done("recortes/caixa", "*.png"):

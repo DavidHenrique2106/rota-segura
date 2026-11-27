@@ -1,26 +1,4 @@
-"""ETAPA 6 - AVALIAÇÃO DO MODELO (com_obstaculo × sem_obstaculo)
-
-Avalia o modelo treinado no conjunto de TESTE (rajadas de fotos que a rede nunca
-viu no treino). O resultado OFICIAL é o medido só nas fotos da BASE OFICIAL (fotos
-do grupo na maquete, arquivos "oficial_*"); os demais subconjuntos aparecem à parte.
-
-Gera:
-    * acurácia, acurácia balanceada, precisão, revocação e F1 por classe;
-    * matriz de confusão (base oficial);
-    * comparação com um modelo simples (regressão logística sobre os pixels);
-    * resultados por origem da imagem (oficial, vídeos, fotos públicas, montagens);
-    * limiar de decisão escolhido na VALIDAÇÃO (nunca no teste);
-    * folha com exemplos de erros.
-
-A métrica mais importante para a segurança é a REVOCAÇÃO DE "com_obstaculo": de
-todos os obstáculos reais, quantos o modelo detectou (deixar passar um obstáculo
-é o erro mais grave).
-
-Saída (ml/artefatos/): avaliacao.json, relatorio_avaliacao.txt, matriz_confusao.png, exemplos_erros.jpg
-
-Uso:
-    python ml/6_avaliacao.py
-"""
+"""ETAPA 6 - AVALIAÇÃO DO MODELO (com_obstaculo × sem_obstaculo)"""
 
 from __future__ import annotations
 
@@ -39,7 +17,7 @@ from comum import ARTIFACTS_DIR, CLASSES, MODEL_PATH, POSITIVE, load_split, tf
 
 NAMES_PT = {"sem_obstaculo": "sem obstáculo", "com_obstaculo": "com obstáculo"}
 NEGATIVE = 1 - POSITIVE
-MIN_RECALL = 0.85  # o limiar precisa detectar pelo menos 85% dos obstáculos na validação
+MIN_RECALL = 0.85
 
 
 def to_arrays(dataset) -> tuple[np.ndarray, np.ndarray, list[str]]:
@@ -52,7 +30,7 @@ def to_arrays(dataset) -> tuple[np.ndarray, np.ndarray, list[str]]:
 
 
 def origin_masks(names: list[str]) -> dict[str, np.ndarray]:
-    starts = lambda prefix: np.array([n.startswith(prefix) for n in names])  # noqa: E731
+    starts = lambda prefix: np.array([n.startswith(prefix) for n in names])
     return {"oficial": starts("oficial_"), "videos_maquete": starts("maquete_"),
             "fotos_publicas": starts("real_"), "montagens": starts("montagem_")}
 
@@ -176,7 +154,20 @@ def main() -> None:
     matrix = confusion_matrix(test_y[official], predicted[official], labels=range(len(CLASSES)))
 
     print("Treinando modelo de comparação (regressão logística)...")
-    train_x, train_y, _ = to_arrays(load_split("treino", 64))
+    train_x, train_y, train_names = to_arrays(load_split("treino", 64))
+    train_prob = model.predict(train_x, verbose=0)[:, POSITIVE]
+    train_pred = decide(train_prob, threshold)
+    train_official = origin_masks(train_names)["oficial"]
+    val_x, val_y, val_names = to_arrays(load_split("validacao", 64))
+    val_pred = decide(model.predict(val_x, verbose=0)[:, POSITIVE], threshold)
+    val_official = origin_masks(val_names)["oficial"]
+    splits = {
+        "treino": {"oficial": summarize(train_y[train_official], train_pred[train_official]),
+                   "tudo": summarize(train_y, train_pred)},
+        "validacao": {"oficial": summarize(val_y[val_official], val_pred[val_official]),
+                      "tudo": summarize(val_y, val_pred)},
+        "teste": {"oficial": summarize(test_y[official], predicted[official]), "tudo": summarize(test_y, predicted)},
+    }
     baseline = baseline_accuracy(train_x, train_y, test_x[official], test_y[official])
 
     oficial = summarize(test_y[official], predicted[official])
@@ -196,13 +187,14 @@ def main() -> None:
         "sem_limiar_0_5": summarize(test_y[official], argmax_pred[official]),
         "por_origem": {name: summarize(test_y[m], predicted[m]) for name, m in masks.items() if m.any()},
         "parametros_modelo": int(model.count_params()),
+        "treino_validacao_teste": splits,
     }
     ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
     (ARTIFACTS_DIR / "avaliacao.json").write_text(json.dumps(results, indent=2, ensure_ascii=False), encoding="utf-8")
     save_confusion_matrix(matrix, ARTIFACTS_DIR / "matriz_confusao.png", "Matriz de confusão — base oficial (teste)")
     save_error_examples(test_x, test_y, predicted, prob, ARTIFACTS_DIR / "exemplos_erros.jpg", masks["oficial"])
 
-    fmt = lambda v: "—" if v is None else f"{v:.3f}"  # noqa: E731
+    fmt = lambda v: "—" if v is None else f"{v:.3f}"
     summary = (
         f"AVALIAÇÃO NO TESTE — BASE OFICIAL ({oficial.get('amostras', 0)} fotos de rajadas nunca vistas no treino)\n"
         f"Regra: 'com obstáculo' quando P(obstáculo) >= {threshold:.2f} (limiar escolhido nas {chosen_on}).\n\n"
@@ -214,6 +206,10 @@ def main() -> None:
         f"Alarmes falsos (sem obst. -> com): {fmt(oficial.get('alarmes_falsos'))}\n"
         f"Modelo simples (acur. balanceada): {baseline:.3f}\n"
     )
+    summary += "\nTreino × validação × teste (base oficial):\n"
+    for split_name, data in splits.items():
+        o = data["oficial"]
+        summary += f"  {split_name:<10} acurácia {fmt(o.get('acuracia'))} ({o.get('amostras', 0)} fotos)\n"
     for name, data in results["por_origem"].items():
         summary += (f"\n{name} ({data['amostras']} imagens): acurácia {fmt(data['acuracia'])}, "
                     f"obstáculos detectados {fmt(data['revocacao_obstaculo'])}, alarmes falsos {fmt(data['alarmes_falsos'])}")

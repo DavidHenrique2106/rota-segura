@@ -1,17 +1,4 @@
-"""EXTRA - BUSCA FOTOS E VÍDEOS NOVOS DA MAQUETE NUMA PASTA DO GOOGLE DRIVE
-
-Baixa a pasta (compartilhada como "Qualquer pessoa com o link") para
-data/maquete/drive/ e copia só os arquivos NOVOS:
-    vídeos -> data/maquete/videos/       (a etapa 1b extrai os quadros)
-    fotos  -> data/maquete/sem_rotulo/   (a etapa 2 rotula)
-Arquivos já processados (mesmo conteúdo) são ignorados.
-
-Saída: imprime "NOVOS: <fotos> fotos, <vídeos> vídeos" e termina com código 0
-se houver novidades, 10 se não houver nada novo.
-
-Uso:
-    python ml/extra_verificar_drive.py --url https://drive.google.com/drive/folders/...
-"""
+"""EXTRA - BUSCA FOTOS E VÍDEOS NOVOS DA MAQUETE NUMA PASTA DO GOOGLE DRIVE"""
 
 from __future__ import annotations
 
@@ -46,12 +33,11 @@ def main() -> None:
     MIRROR.mkdir(parents=True, exist_ok=True)
     try:
         gdown.download_folder(args.url, output=str(MIRROR), quiet=True, resume=True, retries=2)
-    except Exception as error:  # pasta privada, sem internet, limite do Google...
+    except Exception as error:
         print(f"ERRO ao acessar o Drive: {error}")
         sys.exit(2)
 
     done = set(DONE.read_text().split()) if DONE.exists() else set()
-    # Vídeos que já estavam no projeto também contam como processados.
     for existing in (ROOT / "videos").glob("*"):
         if existing.is_file():
             done.add(md5(existing))

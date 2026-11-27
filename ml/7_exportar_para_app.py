@@ -1,15 +1,4 @@
-"""ETAPA 7 - EXPORTAR O MODELO PARA O APP DO CELULAR
-
-Converte o modelo treinado para o formato TensorFlow.js, que roda dentro do
-navegador do celular, e copia as métricas da avaliação para o app exibir.
-
-Saída:
-    public/model/model.json + group1-shard*.bin
-    public/model/info.json
-
-Uso:
-    python ml/7_exportar_para_app.py
-"""
+"""ETAPA 7 - EXPORTAR O MODELO PARA O APP DO CELULAR"""
 
 from __future__ import annotations
 

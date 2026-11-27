@@ -1,21 +1,4 @@
-"""ETAPA 4 - MONTAGEM DA BASE ROTULADA (sem_obstaculo / com_obstaculo)
-
-Junta, em cada partição (treino/validacao/teste) definida na etapa 3:
-
-  * BASE OFICIAL: fotos do grupo na maquete (Drive), rotuladas na etapa 2.
-    Arquivos "oficial_*". É nelas que o desempenho oficial é medido.
-  * Quadros dos vídeos da maquete. Arquivos "maquete_*".
-  * Fontes PÚBLICAS, só se ajudarem (a etapa 5b testa cada combinação):
-      - fotos reais da internet rotuladas na etapa 2 ("real_*");
-      - montagens: um cone ou caixa real colado numa foto real de caminho, na
-        região central ("montagem_*"); sem objeto = sem_obstaculo.
-
-Saída:
-    <saida>/<particao>/<classe>/*.jpg  e  <saida>/metadados.csv
-
-Uso:
-    python ml/4_montar_base_rotulada.py [--publicas nenhuma|reais|montagens|todas] [--saida data/base]
-"""
+"""ETAPA 4 - MONTAGEM DA BASE ROTULADA (sem_obstaculo / com_obstaculo)"""
 
 from __future__ import annotations
 
@@ -30,7 +13,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 
-try:  # permite abrir fotos HEIC (padrão do iPhone)
+try:
     from pillow_heif import register_heif_opener
 
     register_heif_opener()
@@ -38,12 +21,10 @@ except ImportError:
     pass
 
 SEED = 42
-SIZE = 256  # imagens quadradas; o treino reduz para o tamanho da rede
+SIZE = 256
 CLASSES = ("sem_obstaculo", "com_obstaculo")
 MONTAGENS_POR_CLASSE = {"treino": 600, "validacao": 120, "teste": 120}
 
-# Montagem "com obstáculo": (altura relativa mín., máx.), (base do objeto y mín., máx.), (centro x mín., máx.)
-# O objeto fica no corredor central (o caminho), de longe (8% da altura) até muito perto (85%).
 RULE_OBSTACLE = ((0.08, 0.85), (0.55, 1.06), (0.30, 0.70))
 
 
@@ -88,14 +69,13 @@ def paste_object(
     rel_height = rng.uniform(h_min, h_max)
     height = rel_height * SIZE
     width = height * obj.width / obj.height
-    if width > 0.95 * SIZE:  # caixas muito largas: limita a largura
+    if width > 0.95 * SIZE:
         width = 0.95 * SIZE
         height = width * obj.height / obj.width
         rel_height = height / SIZE
     width, height = max(4, round(width)), max(4, round(height))
     obj = obj.resize((width, height), Image.LANCZOS)
 
-    # Ajusta luz do objeto para combinar com o ambiente.
     rgb, alpha = obj.convert("RGB"), obj.getchannel("A")
     rgb = ImageEnhance.Brightness(rgb).enhance(rng.uniform(0.75, 1.1))
     rgb = ImageEnhance.Color(rgb).enhance(rng.uniform(0.8, 1.15))
@@ -106,7 +86,6 @@ def paste_object(
     left, top = round(center_x - width / 2), round(bottom - height)
     left = min(max(left, -width // 4), SIZE - 3 * width // 4)
 
-    # Sombra suave no chão, embaixo do objeto.
     shadow = Image.new("L", (SIZE, SIZE), 0)
     shadow_layer = Image.new("L", (width, max(3, height // 6)), 0)
     ellipse = Image.new("L", shadow_layer.size, 0)
@@ -174,7 +153,6 @@ def main() -> None:
         rows.append({"particao": part, "classe": label, "arquivo": f"{part}/{label}/{name}", "fundo": source,
                      "objeto": "", "tipo": kind, "altura_rel": "", "centro_x": "", "base_y": ""})
 
-    # Base oficial e quadros dos vídeos da maquete: sempre entram.
     for key, folder, prefix, kind in (("oficial", "", "oficial_", "foto_oficial"),
                                       ("maquete", "", "maquete_", "foto_maquete")):
         for part, items in division.get(key, {}).items():

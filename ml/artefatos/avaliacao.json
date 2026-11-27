@@ -1,201 +1,309 @@
 {
-  "amostras_teste": 900,
-  "acuracia_teste": 0.7211,
-  "acuracia_modelo_base_regressao_logistica": 0.36,
-  "revocacao_perigo": 0.8107,
-  "perigo_classificado_como_seguro": 39,
-  "relatorio_por_classe": {
-    "seguro": {
-      "precision": 0.7415730337078652,
-      "recall": 0.584070796460177,
-      "f1-score": 0.6534653465346535,
-      "support": 339.0
-    },
-    "atencao": {
-      "precision": 0.8452830188679246,
-      "recall": 0.797153024911032,
-      "f1-score": 0.8205128205128205,
-      "support": 281.0
-    },
-    "perigo": {
-      "precision": 0.6168478260869565,
-      "recall": 0.8107142857142857,
-      "f1-score": 0.7006172839506173,
-      "support": 280.0
-    },
-    "accuracy": 0.7211111111111111,
-    "macro avg": {
-      "precision": 0.7345679595542487,
-      "recall": 0.7306460356951648,
-      "f1-score": 0.7248651503326972,
-      "support": 900.0
-    },
-    "weighted avg": {
-      "precision": 0.7351501978146677,
-      "recall": 0.7211111111111111,
-      "f1-score": 0.7202907717172476,
-      "support": 900.0
-    }
-  },
-  "matriz_confusao": {
-    "linhas_real_colunas_previsto": [
-      "seguro",
-      "atencao",
-      "perigo"
-    ],
-    "valores": [
-      [
-        198,
-        27,
-        114
-      ],
+  "classes": [
+    "sem_obstaculo",
+    "com_obstaculo"
+  ],
+  "base_oficial_teste": {
+    "amostras": 80,
+    "acuracia": 1.0,
+    "acuracia_balanceada": 1.0,
+    "revocacao_obstaculo": 1.0,
+    "alarmes_falsos": 0.0,
+    "matriz_confusao": [
       [
         30,
-        224,
-        27
+        0
       ],
       [
-        39,
-        14,
-        227
+        0,
+        50
       ]
     ]
   },
-  "parametros_modelo": 198771,
-  "limiar_perigo": 0.35,
-  "limiar_escolha_validacao": [
+  "acuracia_teste": 1.0,
+  "acuracia_balanceada_teste": 1.0,
+  "revocacao_obstaculo": 1.0,
+  "alarmes_falsos": 0.0,
+  "amostras_teste": 80,
+  "acuracia_balanceada_modelo_simples": 0.85,
+  "relatorio_por_classe": {
+    "sem_obstaculo": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 30.0
+    },
+    "com_obstaculo": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 50.0
+    },
+    "accuracy": 1.0,
+    "macro avg": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 80.0
+    },
+    "weighted avg": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 80.0
+    }
+  },
+  "limiar_obstaculo": 0.2,
+  "limiar_escolhido_em": "fotos oficiais da validação",
+  "limiar_tabela_validacao": [
+    {
+      "limiar": 0.1,
+      "revocacao_obstaculo": 1.0,
+      "acuracia_balanceada": 0.8
+    },
     {
       "limiar": 0.15,
-      "revocacao_perigo": 0.9573,
-      "f1_medio": 0.5896,
-      "acuracia": 0.617
+      "revocacao_obstaculo": 1.0,
+      "acuracia_balanceada": 0.825
     },
     {
       "limiar": 0.2,
-      "revocacao_perigo": 0.9288,
-      "f1_medio": 0.6268,
-      "acuracia": 0.6411
+      "revocacao_obstaculo": 1.0,
+      "acuracia_balanceada": 0.825
     },
     {
       "limiar": 0.25,
-      "revocacao_perigo": 0.8968,
-      "f1_medio": 0.6549,
-      "acuracia": 0.6628
+      "revocacao_obstaculo": 0.9429,
+      "acuracia_balanceada": 0.7964
     },
     {
       "limiar": 0.3,
-      "revocacao_perigo": 0.847,
-      "f1_medio": 0.6844,
-      "acuracia": 0.6858
+      "revocacao_obstaculo": 0.8286,
+      "acuracia_balanceada": 0.7393
     },
     {
       "limiar": 0.35,
-      "revocacao_perigo": 0.7651,
-      "f1_medio": 0.6988,
-      "acuracia": 0.6961
+      "revocacao_obstaculo": 0.6857,
+      "acuracia_balanceada": 0.6679
     },
     {
       "limiar": 0.4,
-      "revocacao_perigo": 0.7367,
-      "f1_medio": 0.7185,
-      "acuracia": 0.7156
+      "revocacao_obstaculo": 0.6857,
+      "acuracia_balanceada": 0.6679
     },
     {
       "limiar": 0.45,
-      "revocacao_perigo": 0.6797,
-      "f1_medio": 0.7161,
-      "acuracia": 0.7133
+      "revocacao_obstaculo": 0.6857,
+      "acuracia_balanceada": 0.6679
     },
     {
       "limiar": 0.5,
-      "revocacao_perigo": 0.6157,
-      "f1_medio": 0.7103,
-      "acuracia": 0.7087
+      "revocacao_obstaculo": 0.6857,
+      "acuracia_balanceada": 0.6679
     },
     {
       "limiar": 0.55,
-      "revocacao_perigo": 0.573,
-      "f1_medio": 0.7174,
-      "acuracia": 0.7179
+      "revocacao_obstaculo": 0.6857,
+      "acuracia_balanceada": 0.6679
     },
     {
       "limiar": 0.6,
-      "revocacao_perigo": 0.5445,
-      "f1_medio": 0.7138,
-      "acuracia": 0.7156
+      "revocacao_obstaculo": 0.6857,
+      "acuracia_balanceada": 0.6679
+    },
+    {
+      "limiar": 0.65,
+      "revocacao_obstaculo": 0.6857,
+      "acuracia_balanceada": 0.6679
+    },
+    {
+      "limiar": 0.7,
+      "revocacao_obstaculo": 0.6857,
+      "acuracia_balanceada": 0.6929
+    },
+    {
+      "limiar": 0.75,
+      "revocacao_obstaculo": 0.6,
+      "acuracia_balanceada": 0.775
+    },
+    {
+      "limiar": 0.8,
+      "revocacao_obstaculo": 0.6,
+      "acuracia_balanceada": 0.8
+    },
+    {
+      "limiar": 0.85,
+      "revocacao_obstaculo": 0.6,
+      "acuracia_balanceada": 0.8
+    },
+    {
+      "limiar": 0.9,
+      "revocacao_obstaculo": 0.6,
+      "acuracia_balanceada": 0.8
     }
   ],
-  "sem_limiar_argmax": {
-    "acuracia": 0.7389,
-    "revocacao_perigo": 0.6893,
-    "perigo_classificado_como_seguro": 69
+  "sem_limiar_0_5": {
+    "amostras": 80,
+    "acuracia": 0.9625,
+    "acuracia_balanceada": 0.97,
+    "revocacao_obstaculo": 0.94,
+    "alarmes_falsos": 0.0,
+    "matriz_confusao": [
+      [
+        30,
+        0
+      ],
+      [
+        3,
+        47
+      ]
+    ]
   },
   "por_origem": {
-    "fotos_reais": {
-      "amostras": 355,
-      "acuracia": 0.5577,
-      "revocacao_perigo": 0.7535,
+    "oficial": {
+      "amostras": 80,
+      "acuracia": 1.0,
+      "acuracia_balanceada": 1.0,
+      "revocacao_obstaculo": 1.0,
+      "alarmes_falsos": 0.0,
       "matriz_confusao": [
         [
-          91,
-          8,
-          97
+          30,
+          0
         ],
         [
-          5,
           0,
-          12
+          50
+        ]
+      ]
+    },
+    "videos_maquete": {
+      "amostras": 47,
+      "acuracia": 0.8298,
+      "acuracia_balanceada": 0.8288,
+      "revocacao_obstaculo": 0.875,
+      "alarmes_falsos": 0.2174,
+      "matriz_confusao": [
+        [
+          18,
+          5
         ],
         [
-          32,
           3,
-          107
+          21
         ]
       ]
+    }
+  },
+  "parametros_modelo": 198706,
+  "treino_validacao_teste": {
+    "treino": {
+      "oficial": {
+        "amostras": 290,
+        "acuracia": 0.9862,
+        "acuracia_balanceada": 0.9837,
+        "revocacao_obstaculo": 0.9944,
+        "alarmes_falsos": 0.027,
+        "matriz_confusao": [
+          [
+            108,
+            3
+          ],
+          [
+            1,
+            178
+          ]
+        ]
+      },
+      "tudo": {
+        "amostras": 536,
+        "acuracia": 0.9179,
+        "acuracia_balanceada": 0.9139,
+        "revocacao_obstaculo": 0.9414,
+        "alarmes_falsos": 0.1135,
+        "matriz_confusao": [
+          [
+            203,
+            26
+          ],
+          [
+            18,
+            289
+          ]
+        ]
+      }
     },
-    "maquete": {
-      "amostras": 60,
-      "acuracia": 0.8833,
-      "revocacao_perigo": null,
-      "matriz_confusao": [
-        [
-          53,
-          0,
-          6
-        ],
-        [
-          1,
-          0,
-          0
-        ],
-        [
-          0,
-          0,
-          0
+    "validacao": {
+      "oficial": {
+        "amostras": 55,
+        "acuracia": 0.8727,
+        "acuracia_balanceada": 0.825,
+        "revocacao_obstaculo": 1.0,
+        "alarmes_falsos": 0.35,
+        "matriz_confusao": [
+          [
+            13,
+            7
+          ],
+          [
+            0,
+            35
+          ]
         ]
-      ]
+      },
+      "tudo": {
+        "amostras": 102,
+        "acuracia": 0.8333,
+        "acuracia_balanceada": 0.8181,
+        "revocacao_obstaculo": 0.9153,
+        "alarmes_falsos": 0.2791,
+        "matriz_confusao": [
+          [
+            31,
+            12
+          ],
+          [
+            5,
+            54
+          ]
+        ]
+      }
     },
-    "montagens": {
-      "amostras": 485,
-      "acuracia": 0.8206,
-      "revocacao_perigo": 0.8696,
-      "matriz_confusao": [
-        [
-          54,
-          19,
-          11
-        ],
-        [
-          24,
-          224,
-          15
-        ],
-        [
-          7,
-          11,
-          120
+    "teste": {
+      "oficial": {
+        "amostras": 80,
+        "acuracia": 1.0,
+        "acuracia_balanceada": 1.0,
+        "revocacao_obstaculo": 1.0,
+        "alarmes_falsos": 0.0,
+        "matriz_confusao": [
+          [
+            30,
+            0
+          ],
+          [
+            0,
+            50
+          ]
         ]
-      ]
+      },
+      "tudo": {
+        "amostras": 127,
+        "acuracia": 0.937,
+        "acuracia_balanceada": 0.9326,
+        "revocacao_obstaculo": 0.9595,
+        "alarmes_falsos": 0.0943,
+        "matriz_confusao": [
+          [
+            48,
+            5
+          ],
+          [
+            3,
+            71
+          ]
+        ]
+      }
     }
   }
 }

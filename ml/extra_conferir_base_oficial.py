@@ -1,12 +1,4 @@
-"""EXTRA - CONFERE SE TODAS AS FOTOS DO DRIVE ESTÃO NA BASE OFICIAL
-
-Compara: fotos baixadas do Drive (data/maquete/drive_oficial) x fotos
-convertidas (data/maquete/oficial) x fotos rotuladas (data/rotulos_oficial.csv)
-x fotos usadas na divisão (data/divisao.json), e diz o motivo de cada exclusão.
-
-Uso:
-    python ml/extra_conferir_base_oficial.py
-"""
+"""EXTRA - CONFERE SE TODAS AS FOTOS DO DRIVE ESTÃO NA BASE OFICIAL"""
 
 from __future__ import annotations
 

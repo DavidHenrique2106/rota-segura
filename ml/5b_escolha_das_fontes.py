@@ -1,24 +1,4 @@
-"""ETAPA 5b - QUAIS FONTES PÚBLICAS AJUDAM? (seleção de dados)
-
-A base oficial são as fotos do grupo na maquete. As fontes públicas (fotos da
-internet rotuladas e montagens de cone/caixa) só devem ficar se melhorarem o
-modelo NA MAQUETE. Este script testa 4 combinações:
-
-    nenhuma    só base oficial + vídeos da maquete
-    reais      + fotos públicas da internet
-    montagens  + montagens de cone/caixa
-    todas      + as duas
-
-Para cada uma: monta a base (etapa 4), treina (etapa 5) e mede a ACURÁCIA
-BALANCEADA nas fotos oficiais da VALIDAÇÃO. A melhor é escolhida pela validação
-(o teste continua intocado para a avaliação final da etapa 6). No fim, a base e
-o modelo escolhidos viram os oficiais (data/base, ml/artefatos/modelo.keras).
-
-Saída: ml/artefatos/escolha_fontes.json
-
-Uso:
-    python ml/5b_escolha_das_fontes.py [--epocas 40]
-"""
+"""ETAPA 5b - QUAIS FONTES PÚBLICAS AJUDAM? (seleção de dados)"""
 
 from __future__ import annotations
 
@@ -87,7 +67,6 @@ def main() -> None:
                                          results[o]["acuracia_balanceada_0_5"]))
     print(f"\nEscolhida: {chosen}")
 
-    # A combinação escolhida vira a oficial.
     if Path("data/base").exists():
         shutil.rmtree("data/base")
     shutil.copytree(f"data/bases/{chosen}", "data/base")

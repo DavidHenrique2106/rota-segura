@@ -1,32 +1,29 @@
-AVALIAÇÃO NO CONJUNTO DE TESTE (900 imagens nunca vistas no treino)
-Regra de decisão: 'perigo' quando P(perigo) >= 0.35 (escolhido na validação: maior F1 médio com revocação de perigo >= 0,75).
-Sem limiar (classe mais provável): acurácia 0.739, revocação de perigo 0.689
+AVALIAÇÃO NO TESTE — BASE OFICIAL (80 fotos de rajadas nunca vistas no treino)
+Regra: 'com obstáculo' quando P(obstáculo) >= 0.20 (limiar escolhido nas fotos oficiais da validação).
 
-              precision    recall  f1-score   support
+               precision    recall  f1-score   support
 
-      seguro      0.742     0.584     0.653       339
-     atencao      0.845     0.797     0.821       281
-      perigo      0.617     0.811     0.701       280
+sem_obstaculo      1.000     1.000     1.000        30
+com_obstaculo      1.000     1.000     1.000        50
 
-    accuracy                          0.721       900
-   macro avg      0.735     0.731     0.725       900
-weighted avg      0.735     0.721     0.720       900
+     accuracy                          1.000        80
+    macro avg      1.000     1.000     1.000        80
+ weighted avg      1.000     1.000     1.000        80
 
-Matriz de confusão (linhas = real, colunas = previsto; ordem seguro, atencao, perigo):
-[[198  27 114]
- [ 30 224  27]
- [ 39  14 227]]
+Matriz de confusão (linhas = real, colunas = previsto; ordem sem_obstaculo, com_obstaculo):
+[[30  0]
+ [ 0 50]]
 
-Acurácia da CNN:                          0.721
-Acurácia do modelo de base (reg. logística): 0.360
-Revocação de 'perigo':                    0.811
-Casos de 'perigo' previstos como 'seguro': 39
+Acurácia:                         1.000
+Acurácia balanceada:              1.000
+Obstáculos detectados (revocação): 1.000
+Alarmes falsos (sem obst. -> com): 0.000
+Modelo simples (acur. balanceada): 0.850
 
-Só fotos reais (355 imagens): acurácia 0.558, revocação de perigo 0.753
-  matriz: [[91, 8, 97], [5, 0, 12], [32, 3, 107]]
+Treino × validação × teste (base oficial):
+  treino     acurácia 0.986 (290 fotos)
+  validacao  acurácia 0.873 (55 fotos)
+  teste      acurácia 1.000 (80 fotos)
 
-Só maquete (60 imagens): acurácia 0.883, revocação de perigo sem casos de perigo
-  matriz: [[53, 0, 6], [1, 0, 0], [0, 0, 0]]
-
-Só montagens (485 imagens): acurácia 0.821, revocação de perigo 0.870
-  matriz: [[54, 19, 11], [24, 224, 15], [7, 11, 120]]
+oficial (80 imagens): acurácia 1.000, obstáculos detectados 1.000, alarmes falsos 0.000
+videos_maquete (47 imagens): acurácia 0.830, obstáculos detectados 0.875, alarmes falsos 0.217

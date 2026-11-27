@@ -1,16 +1,4 @@
-"""ETAPA 1c - COLETA: BASE OFICIAL (FOTOS DA MAQUETE NO GOOGLE DRIVE)
-
-Baixa as fotos tiradas pelo grupo na maquete (pasta do Drive compartilhada como
-"Qualquer pessoa com o link") e salva uma cópia reduzida (lado maior 1024 px,
-já na orientação correta) em data/maquete/oficial/. Essa é a BASE OFICIAL do
-projeto: é nela que o modelo é avaliado.
-
-As fotos foram tiradas em rajada (sequências quase iguais, nomes ..._BURSTnn).
-A etapa 3 divide treino/validação/teste por RAJADA, nunca foto a foto.
-
-Uso:
-    python ml/1c_fotos_oficiais_drive.py [--url <link da pasta>]
-"""
+"""ETAPA 1c - COLETA: BASE OFICIAL (FOTOS DA MAQUETE NO GOOGLE DRIVE)"""
 
 from __future__ import annotations
 
@@ -20,7 +8,7 @@ from pathlib import Path
 import gdown
 from PIL import Image, ImageOps
 
-try:  # fotos HEIC de iPhone
+try:
     from pillow_heif import register_heif_opener
 
     register_heif_opener()
@@ -28,8 +16,8 @@ except ImportError:
     pass
 
 URL = "https://drive.google.com/drive/folders/1Mpdb1Dk8PKUlx3vIiX9qZwu6G_Gm4WZG"
-MIRROR = Path("data/maquete/drive_oficial")   # cópia original (grande, fora do git)
-OUTPUT = Path("data/maquete/oficial")         # cópia reduzida (base oficial)
+MIRROR = Path("data/maquete/drive_oficial")
+OUTPUT = Path("data/maquete/oficial")
 PHOTO = {".jpg", ".jpeg", ".png", ".heic", ".webp"}
 
 
@@ -42,7 +30,7 @@ def main() -> None:
     MIRROR.mkdir(parents=True, exist_ok=True)
     OUTPUT.mkdir(parents=True, exist_ok=True)
     if not args.sem_download:
-        for attempt in range(3):  # o Drive às vezes falha em um arquivo; tentar de novo retoma de onde parou
+        for attempt in range(3):
             try:
                 gdown.download_folder(args.url, output=str(MIRROR), quiet=True, resume=True, retries=3)
                 break

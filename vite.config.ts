@@ -4,7 +4,6 @@ import basicSsl from '@vitejs/plugin-basic-ssl'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
-  // HTTPS local: o navegador do celular só libera a câmera em conexão segura.
   plugins: [
     react(),
     basicSsl(),

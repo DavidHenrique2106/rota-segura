@@ -1,42 +1,4 @@
-"""ETAPA 2 - ROTULAGEM AUTOMÁTICA DAS FOTOS REAIS
-
-Rotula fotos como COM OBSTÁCULO ou SEM OBSTÁCULO, usando um modelo PRÉ-TREINADO
-de detecção de objetos como "rotulador":
-
-    OWLv2 (Google, google/owlv2-base-patch16-ensemble) - detector que entende
-    texto: procuramos por "traffic cone", "cardboard box", "person", "chair",
-    "bench", "bicycle", "trash can"... qualquer coisa que possa estar no caminho.
-
-IMPORTANTE: o OWLv2 é usado SOMENTE aqui, para criar os rótulos da base. Ele não
-vai para o app. O modelo do projeto (etapa 5) é uma CNN treinada do zero que
-aprende com esses rótulos. É a técnica de "professor-aluno" (destilação):
-um modelo grande rotula os dados e um modelo pequeno, nosso, aprende com eles.
-
-Regra: a câmera olha ao longo da faixa amarela (o caminho). Para cada objeto
-detectado que esteja no CORREDOR CENTRAL da imagem (25% a 75% da largura, por
-onde a pessoa vai passar):
-
-    com_obstaculo   algum objeto no corredor com altura >= 6% da imagem
-    sem_obstaculo   nenhum objeto no corredor (objetos só nas laterais, ou
-                    pequenos demais para ver, abaixo de 3% da altura)
-    descartada      só há objetos de 3% a 6% da altura no corredor (ambíguo)
-
-Também rotula as fotos da MAQUETE tiradas pelo grupo, sem precisar rotular à
-mão: coloque-as em data/maquete/sem_rotulo/ e rode
-    python ml/2_rotulagem_automatica.py --fotos data/maquete/sem_rotulo --saida data/rotulos_maquete.csv
-(o executar_tudo.sh faz isso sozinho quando a pasta tem fotos). As fotos são
-recortadas no quadrado central antes da detecção, igual ao que o app analisa.
-
-Saída:
-    data/rotulos_automaticos.csv           (fotos públicas)
-    data/rotulos_oficial.csv               (base oficial: --fotos data/maquete/oficial)
-    ml/artefatos/rotulagem_*_<classe>.jpg  (amostras com as detecções desenhadas)
-
-Uso (precisa de ml/requirements-rotulagem.txt):
-    python ml/2_rotulagem_automatica.py --fotos data/maquete/oficial --saida data/rotulos_oficial.csv
-    python ml/2_rotulagem_automatica.py --recalcular data/rotulos_automaticos.csv
-        (refaz só os rótulos a partir das detecções já guardadas, sem rodar o detector)
-"""
+"""ETAPA 2 - ROTULAGEM AUTOMÁTICA DAS FOTOS REAIS"""
 
 from __future__ import annotations
 
@@ -50,7 +12,7 @@ import numpy as np
 import torch
 from PIL import Image, ImageDraw
 
-try:  # permite abrir fotos HEIC (padrão do iPhone)
+try:
     from pillow_heif import register_heif_opener
 
     register_heif_opener()
@@ -59,7 +21,6 @@ except ImportError:
 from transformers import Owlv2ForObjectDetection, Owlv2Processor
 
 DETECTOR = "google/owlv2-base-patch16-ensemble"
-# Consulta em inglês (o detector foi treinado em inglês) -> nome em português.
 OBSTACLES = {
     "a traffic cone": "cone", "a cardboard box": "caixa", "a box": "caixa", "a person": "pessoa",
     "a chair": "cadeira", "a bench": "banco", "a table": "mesa", "a bicycle": "bicicleta",
@@ -67,20 +28,17 @@ OBSTACLES = {
     "a suitcase": "mala", "a barrel": "barril", "a sofa": "sofa", "a dog": "cachorro",
     "a car": "carro", "a motorcycle": "moto", "a stroller": "carrinho", "a shopping cart": "carrinho",
     "a pillar": "pilar", "a barrier": "barreira", "a sign post": "placa",
-    # Objetos em miniatura da maquete (testado nas fotos de data/maquete/visao_geral).
     "a toy traffic cone": "cone", "a road barrier": "barreira", "a can": "lata", "a jar": "pote",
     "a toy figure": "boneco", "a toy car": "carro", "a toy gas station": "posto", "a black jar": "pote",
 }
 QUERIES = list(OBSTACLES)
-# Na maquete (que fica sobre uma mesa) termos genéricos como "table", "plant pot" ou "barrier" marcam a própria
-# base, a sebe ou a calçada. Por isso, nas fotos/vídeos da maquete, procuramos só os objetos que existem nela.
 MAQUETE_QUERIES = ["a toy traffic cone", "a traffic cone", "a road barrier", "a can", "a jar", "a toy figure",
                    "a toy car", "a toy gas station", "a black jar"]
 SCORE_MIN = 0.28
-CORRIDOR = (0.25, 0.75)  # faixa horizontal por onde a pessoa vai passar
+CORRIDOR = (0.25, 0.75)
 CLASSES = ("sem_obstaculo", "com_obstaculo")
-MIN_OBSTACLE = 0.06  # altura mínima (fração da imagem) para contar como obstáculo
-MIN_VISIBLE = 0.03   # abaixo disso o objeto é pequeno/distante demais e não conta
+MIN_OBSTACLE = 0.15
+MIN_VISIBLE = 0.08
 
 
 def square(image: Image.Image, size: int = 256) -> Image.Image:
@@ -98,6 +56,8 @@ def mostly_tactile_strip(image: Image.Image, box: tuple[float, float, float, flo
     Descarta caixas em que mais de 35% dos pixels são amarelo-vivo (a cor da faixa)."""
     w, h = image.size
     x0, y0, x1, y1 = box
+    if (y1 - y0) < 0.35 and (x1 - x0) < 0.35:
+        return False
     crop = image.crop((int(x0 * w), int(y0 * h), max(int(x1 * w), int(x0 * w) + 1), max(int(y1 * h), int(y0 * h) + 1)))
     hsv = np.asarray(crop.convert("HSV")).astype(np.int16)
     yellow = (hsv[..., 0] >= 28) & (hsv[..., 0] <= 50) & (hsv[..., 1] >= 110) & (hsv[..., 2] >= 120)
@@ -108,9 +68,8 @@ def object_level(box: tuple[float, float, float, float]) -> str:
     """Classifica UM objeto detectado (coordenadas normalizadas 0..1)."""
     x0, y0, x1, y1 = box
     overlap = max(0.0, min(x1, CORRIDOR[1]) - max(x0, CORRIDOR[0]))
-    # No caminho = pelo menos metade do objeto dentro do corredor (vale para objetos pequenos e grandes).
     if overlap < 0.5 * max(x1 - x0, 1e-6) and overlap < 0.25 * (CORRIDOR[1] - CORRIDOR[0]):
-        return "fora"        # nas laterais, fora do caminho
+        return "fora"
     height = y1 - y0
     if height >= MIN_OBSTACLE:
         return "obstaculo"
@@ -136,8 +95,11 @@ def relabel(csv_path: Path) -> list[dict]:
         for item in filter(None, row["deteccoes"].split(";")):
             name, old_level, coords = item.split("|")
             box = tuple(float(v) for v in coords.split(","))
-            level = "fora" if name == "faixa_amarela" else object_level(box)
-            if name != "faixa_amarela":
+            is_strip = name == "faixa_amarela" and not ((box[3] - box[1]) < 0.35 and (box[2] - box[0]) < 0.35)
+            if name == "faixa_amarela" and not is_strip:
+                name = "objeto"
+            level = "fora" if is_strip else object_level(box)
+            if not is_strip:
                 levels.append(level)
             details.append(f"{name}|{level}|{coords}")
         row["rotulo"] = image_label(levels) or "descartada"
@@ -149,7 +111,6 @@ def detect(model, processor, images: list[Image.Image], device: str, queries: li
     inputs = processor(text=[queries] * len(images), images=images, return_tensors="pt").to(device)
     with torch.inference_mode():
         outputs = model(**inputs)
-    # OWLv2 trabalha numa versão quadrada da imagem; nossas fotos já são quadradas.
     sizes = torch.tensor([[1.0, 1.0]] * len(images))
     results = processor.post_process_object_detection(outputs, threshold=SCORE_MIN, target_sizes=sizes)
     found = []
@@ -158,7 +119,7 @@ def detect(model, processor, images: list[Image.Image], device: str, queries: li
         for box, label, score in zip(result["boxes"].tolist(), result["labels"].tolist(), result["scores"].tolist()):
             x0, y0, x1, y1 = (min(max(v, 0.0), 1.0) for v in box)
             if x1 - x0 > 0.95 and y1 - y0 > 0.95:
-                continue  # "objeto" do tamanho da foto inteira: falso positivo típico
+                continue
             boxes.append((OBSTACLES[queries[label]], round(score, 3), (x0, y0, x1, y1)))
         found.append(boxes)
     return found
@@ -222,7 +183,6 @@ def main() -> None:
     model = Owlv2ForObjectDetection.from_pretrained(DETECTOR).to(device).eval()
 
     is_maquete = "maquete" in str(args.fotos)
-    # Retoma de onde parou: o progresso é gravado a cada lote em um arquivo parcial.
     fields = ["arquivo", "rotulo", "deteccoes"]
     partial = args.saida.with_suffix(".parcial.csv")
     args.saida.parent.mkdir(parents=True, exist_ok=True)
@@ -257,7 +217,7 @@ def main() -> None:
             writer.writerow(row)
         handle.flush()
         if device == "mps":
-            torch.mps.empty_cache()  # evita que a memória da GPU cresça a cada lote
+            torch.mps.empty_cache()
         if (i // args.lote) % 25 == 0:
             elapsed = time.time() - start
             print(f"  {len(rows)}/{len(files)} fotos ({elapsed:.0f}s)", flush=True)
