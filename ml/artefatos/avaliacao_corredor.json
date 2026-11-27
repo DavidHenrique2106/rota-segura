@@ -1,0 +1,20 @@
+{
+  "limiar_obstaculo": 0.35,
+  "amostras_teste": 127,
+  "teste": {
+    "acuracia": 0.937007874015748,
+    "acuracia_balanceada": 0.932559918408975,
+    "obstaculos_detectados": 0.9594594594594594,
+    "alarmes_falsos": 0.09433962264150941
+  },
+  "robustez": {
+    "imagem_lisa_livre": 1.0,
+    "alarme_falso_sem_laterais_bagunçadas": 0.09433962264150944,
+    "alarme_falso_com_laterais_bagunçadas": 0.09433962264150944,
+    "acuracia_escuro": 0.905511811023622,
+    "acuracia_claro": 0.7795275590551181,
+    "acuracia_baixo_contraste": 0.905511811023622,
+    "acuracia_rotacao_-8": 0.9448818897637795,
+    "acuracia_rotacao_8": 0.9133858267716536
+  }
+}

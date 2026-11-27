@@ -3,10 +3,14 @@
     "sem_obstaculo",
     "com_obstaculo"
   ],
-  "tamanho_imagem": 160,
-  "acuracia_teste": 1.0,
-  "acuracia_balanceada": 1.0,
-  "revocacao_obstaculo": 1.0,
-  "amostras_teste": 80,
-  "limiar_obstaculo": 0.2
+  "tamanho_imagem": [
+    192,
+    96
+  ],
+  "pre_processamento": "corredor central + tons de cinza + autocontraste",
+  "acuracia_teste": 0.937,
+  "acuracia_balanceada": 0.933,
+  "revocacao_obstaculo": 0.959,
+  "amostras_teste": 127,
+  "limiar_obstaculo": 0.35
 }

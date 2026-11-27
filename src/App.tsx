@@ -4,7 +4,11 @@ import type { LayersModel } from '@tensorflow/tfjs'
 import { AlertTriangle, Camera, Check, CircleHelp, Download, Eye, ImagePlus, LoaderCircle, Radio, ShieldCheck, Volume2, VolumeX, Vibrate, X } from 'lucide-react'
 
 const CLASSES = ['sem_obstaculo', 'com_obstaculo'] as const
-const IMAGE_SIZE = 160
+// Pré-processamento (igual ao treino): quadrado central 192x192 -> corredor central (colunas 48 a 144)
+// -> tons de cinza -> autocontraste (média 0, desvio 1 por imagem).
+const SQUARE = 192
+const CORRIDOR_LEFT = 48
+const CORRIDOR_WIDTH = 96
 type ModelInfo = { acuracia_teste?: number; acuracia_balanceada?: number; revocacao_obstaculo?: number; amostras_teste?: number; limiar_obstaculo?: number }
 type Risk = (typeof CLASSES)[number]
 type Mode = 'monitor' | 'collect'
@@ -25,6 +29,9 @@ export default function App() {
   const streamRef = useRef<MediaStream | null>(null)
   const modelRef = useRef<LayersModel | null>(null)
   const previousRisk = useRef<Risk | null>(null)
+  // Últimas probabilidades de obstáculo: a decisão usa a média dos 2 últimos quadros (1 segundo),
+  // para um quadro tremido ou borrado não disparar o alarme sozinho.
+  const recentProbs = useRef<number[]>([])
   const lastAlertAt = useRef(0)
   const audioRef = useRef<AudioContext | null>(null)
   const [cameraOn, setCameraOn] = useState(false)
@@ -88,6 +95,7 @@ export default function App() {
       setCameraMessage('Câmera ativa. Mantenha o celular apontado para o percurso.')
       setAlertMessage('Alertas por som e vibração prontos.')
       previousRisk.current = null
+      recentProbs.current = []
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Permissão não concedida.'
       setCameraMessage(`Não foi possível abrir a câmera: ${message}`)
@@ -112,23 +120,29 @@ export default function App() {
       const side = Math.min(height, width)
       const top = Math.floor((height - side) / 2)
       const left = Math.floor((width - side) / 2)
-      return frame
+      const square = frame
         .slice([top, left, 0], [side, side, 3])
-        .resizeBilinear([IMAGE_SIZE, IMAGE_SIZE])
+        .resizeBilinear([SQUARE, SQUARE], false, true)
         .toFloat()
-        .div(255)
-        .expandDims(0)
+      // Só o corredor central: grama, banco e objetos das laterais não entram na análise.
+      const corridor = square.slice([0, CORRIDOR_LEFT, 0], [SQUARE, CORRIDOR_WIDTH, 3])
+      // Sem cor: tons de cinza.
+      const gray = corridor.mul(tf.tensor1d([0.299, 0.587, 0.114])).sum(-1, true)
+      // Autocontraste: tira o efeito de imagem mais clara ou mais escura.
+      const { mean, variance } = tf.moments(gray)
+      return gray.sub(mean).div(variance.sqrt().add(8)).expandDims(0)
     })
     try {
       const prediction = model.predict(input) as tf.Tensor
       const values = await prediction.data()
       prediction.dispose()
       const obstacleIndex = CLASSES.indexOf('com_obstaculo')
-      const threshold = dangerThreshold.current ?? 0.5
-      const maxIndex = values[obstacleIndex] >= threshold ? obstacleIndex : 1 - obstacleIndex
-      const nextRisk = CLASSES[maxIndex]
+      const threshold = dangerThreshold.current ?? 0.35
+      recentProbs.current = [...recentProbs.current, values[obstacleIndex]].slice(-2)
+      const obstacleProb = recentProbs.current.reduce((sum, p) => sum + p, 0) / recentProbs.current.length
+      const nextRisk: Risk = obstacleProb >= threshold ? 'com_obstaculo' : 'sem_obstaculo'
       setRisk(nextRisk)
-      setConfidence(values[maxIndex] ?? 0)
+      setConfidence(nextRisk === 'com_obstaculo' ? obstacleProb : 1 - obstacleProb)
       if (previousRisk.current !== nextRisk || (nextRisk === 'com_obstaculo' && Date.now() - lastAlertAt.current > 1500)) {
         announceRisk(nextRisk)
       }
