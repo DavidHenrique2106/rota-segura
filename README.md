@@ -20,6 +20,34 @@ A câmera olha o caminho à frente e o modelo classifica cada quadro em **sem ob
 
 A validação cruzada é a estimativa mais confiável: com poucas rajadas de fotos, o resultado de uma única divisão depende muito de quais fotos caem no teste.
 
+## Versão 2: modelo do corredor (sem cor, com autocontraste)
+
+O primeiro modelo aprendia a "cara da cena da maquete": muita grama, banco e latas virava obstáculo, e uma imagem lisa virava caminho livre. Quando o fundo mudava, ele errava (nos testes, 38% de alarmes falsos com laterais bagunçadas e acurácia de 42% a 50% com foto mais escura ou mais clara).
+
+A versão 2 (`ml/treino_corredor.py`) muda o que o modelo enxerga e como ele treina:
+
+| Mudança | Para que serve |
+| --- | --- |
+| Recorte só do corredor central (colunas 25% a 75%) | grama, banco e objetos das laterais não entram na decisão (a mesma região usada na rotulagem) |
+| Tons de cinza | o modelo não depende da cor do objeto nem do fundo |
+| Autocontraste por imagem (média 0, desvio 1) | foto mais clara ou mais escura dá o mesmo resultado |
+| Rotação aleatória de ±10° e deslocamento lateral | o celular na mão nunca fica perfeitamente reto |
+| Imagens lisas rotuladas como "sem obstáculo" | cor sólida = nada no caminho |
+| Limiar 0,35 | mais sensível a obstáculos, por segurança |
+| Média dos 2 últimos quadros no app | um quadro tremido ou borrado não dispara o alarme sozinho |
+
+O app faz o mesmo pré-processamento (`src/App.tsx`) antes de chamar o modelo.
+
+| Teste (127 fotos da maquete nunca vistas no treino) | Modelo antigo (receita original, média de 3 treinos) | Versão 2 |
+| --- | --- | --- |
+| Acurácia | 83,5% | 93,7% |
+| Obstáculos detectados | 77% | 95,9% |
+| Alarmes falsos com laterais bagunçadas | 37% | 9,4% (igual sem as laterais) |
+| Acurácia com foto mais escura / mais clara | 57% / 48% | 91% / 78% |
+| Imagem de cor sólida | 79% livre | 100% livre |
+
+O modelo continua treinado só com fotos da maquete: ele funciona para a maquete e para objetos no corredor à frente, não para qualquer cenário. Para melhorar mais, o caminho é fotografar a maquete com mais fundos, ângulos e iluminações.
+
 ## Arquitetura do sistema
 
 ```
